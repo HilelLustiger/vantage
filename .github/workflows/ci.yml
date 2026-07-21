@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [apps/web, apps/backend, packages/shared-types]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install, lint, typecheck, test
+        working-directory: ${{ matrix.app }}
+        run: |
+          if [ ! -f package.json ]; then
+            echo "no package.json yet in ${{ matrix.app }}, skipping"
+            exit 0
+          fi
+          npm install
+          npm run lint --if-present
+          npm run typecheck --if-present
+          npm test --if-present
+
+  parser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/parser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install, lint, test
+        run: |
+          if [ ! -f pyproject.toml ] && [ ! -f requirements.txt ]; then
+            echo "no python project yet, skipping"
+            exit 0
+          fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install ruff pytest
+          ruff check .
+          if [ -d tests ] || ls test_*.py >/dev/null 2>&1; then pytest; fi
+
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose config
+        run: |
+          if [ -f docker-compose.yml ]; then
+            docker compose config
+          else
+            echo "docker-compose.yml not present yet, skipping"
+          fi
