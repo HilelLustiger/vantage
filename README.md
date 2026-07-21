@@ -8,7 +8,7 @@ every Account they can see.
 Not a SaaS product — runs locally, for one household.
 
 See [`docs/DOMAIN.md`](docs/DOMAIN.md) for the domain language and
-[`docs/decisions.md`](docs/decisions.md) for the foundational design decisions
+[`docs/ADR/`](docs/ADR/README.md) for the foundational design decisions
 (data model, import pipeline, system architecture, security).
 
 ## Status
