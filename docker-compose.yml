@@ -26,9 +26,13 @@ services:
     volumes:
       - .:/repo
       - node_modules:/repo/node_modules
+    environment:
+      BACKEND_INTERNAL_URL: http://backend:3001
     command: sh -c "npm ci && npm run dev --workspace=apps/web -- --host 0.0.0.0"
     ports:
       - "5173:5173"
+    depends_on:
+      - backend
 
   parser:
     image: python:3.12-slim
