@@ -8,25 +8,34 @@ on:
 jobs:
   node:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        app: [apps/web, apps/backend, packages/shared-types]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://test:test@localhost:5432/test
+      SESSION_SECRET: ci-only-secret
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install, lint, typecheck, test
-        working-directory: ${{ matrix.app }}
-        run: |
-          if [ ! -f package.json ]; then
-            echo "no package.json yet in ${{ matrix.app }}, skipping"
-            exit 0
-          fi
-          npm install
-          npm run lint --if-present
-          npm run typecheck --if-present
-          npm test --if-present
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspaces --if-present
+      - run: npm run typecheck --workspaces --if-present
+      - run: npm run db:migrate --workspace=apps/backend --if-present
+      - run: npm test --workspaces --if-present
 
   parser:
     runs-on: ubuntu-latest
@@ -44,8 +53,12 @@ jobs:
             echo "no python project yet, skipping"
             exit 0
           fi
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install ruff pytest
+          if [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          elif [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+            pip install ruff pytest
+          fi
           ruff check .
           if [ -d tests ] || ls test_*.py >/dev/null 2>&1; then pytest; fi
 
@@ -56,6 +69,7 @@ jobs:
       - name: Validate docker-compose config
         run: |
           if [ -f docker-compose.yml ]; then
+            cp .env.example .env
             docker compose config
           else
             echo "docker-compose.yml not present yet, skipping"

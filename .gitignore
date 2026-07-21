@@ -16,3 +16,12 @@ venv/
 # Editors
 .vscode/
 .idea/
+
+# Working docs (active plan / current status) — not the durable record
+docs/PLAN.md
+docs/STATUS.md
+docs/UI-ideas.md
+
+
+# Drizzle migrations output is committed; local drizzle-kit cache is not
+.drizzle/

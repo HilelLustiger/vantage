@@ -1,0 +1,21 @@
+{
+  "name": "@vantage/test",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vantage/backend": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "@types/supertest": "^6.0.2",
+    "dotenv": "^16.4.5",
+    "supertest": "^7.0.0",
+    "vitest": "^2.0.5"
+  }
+}
