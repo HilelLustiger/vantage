@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { parseArgs } from "node:util";
-import { hashPassword } from "../api/auth/password.js";
+import { hashPassword } from "../api/password.js";
 import { createUser } from "../shared/db/users.js";
 import { pool } from "../shared/db/client.js";
 

@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, json } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, json, primaryKey } from "drizzle-orm/pg-core";
+import type { AssetType } from "@vantage/shared-types";
 
 export const users = pgTable("users", {
   id: text("id")
@@ -16,4 +17,46 @@ export const session = pgTable("session", {
   sid: text("sid").primaryKey(),
   sess: json("sess").notNull(),
   expire: timestamp("expire", { precision: 6, withTimezone: false }).notNull(),
+});
+
+export const institutions = pgTable("institutions", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+});
+
+export const accounts = pgTable("accounts", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  institutionId: text("institution_id")
+    .notNull()
+    .references(() => institutions.id),
+  name: text("name").notNull(),
+});
+
+// An Account can have several owning Users (joint), a User can own several
+// Accounts. Mirrors shared-types' Account.ownerUserIds.
+export const accountUsers = pgTable(
+  "account_users",
+  {
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.accountId, t.userId] }) }),
+);
+
+export const assets = pgTable("assets", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  type: text("type").notNull().$type<AssetType>(),
+  name: text("name").notNull(),
+  ticker: text("ticker"),
+  isin: text("isin"),
 });

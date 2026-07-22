@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { findUserByEmail, findUserById } from "../../shared/db/users.js";
+import type { User } from "@vantage/shared-types";
+import { findUserByEmail, findUserById } from "../shared/db/users.js";
 import { verifyPassword } from "./password.js";
-import { requireAuth } from "../middleware/requireAuth.js";
+import { requireAuth } from "./requireAuth.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -31,7 +32,9 @@ authRouter.post("/login", async (req, res) => {
       return;
     }
     req.session.userId = user.id;
-    res.status(200).json({ id: user.id, email: user.email });
+    res.status(200).json(
+      { id: user.id, email: user.email } satisfies Pick<User, "id" | "email">,
+    );
   });
 });
 

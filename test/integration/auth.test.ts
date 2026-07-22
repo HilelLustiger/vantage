@@ -3,7 +3,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "@vantage/backend/app";
 import { createUser } from "@vantage/backend/db/users";
-import { hashPassword } from "@vantage/backend/auth/password";
+import { hashPassword } from "@vantage/backend/password";
 
 // Exercises the real HTTP surface end-to-end against a real Postgres
 // (migrated separately — see package.json's db:migrate). Creates its user via

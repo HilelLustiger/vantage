@@ -7,7 +7,7 @@
     "./app": "./src/app.ts",
     "./db/users": "./src/shared/db/users.ts",
     "./db/client": "./src/shared/db/client.ts",
-    "./auth/password": "./src/api/auth/password.ts"
+    "./password": "./src/api/password.ts"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
