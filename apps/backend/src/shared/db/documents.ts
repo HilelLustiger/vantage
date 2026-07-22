@@ -7,9 +7,10 @@ import { accountUsers, documents } from "./schema.js";
 // null; Document models them as the wire/JSON shape (ISO strings, optional
 // fields) — normalize at the boundary, same pattern as assets.ts's toAsset().
 //
-// parsedData is deliberately dropped here, not spread through: it's raw
-// parser-service output (statement holdings/balances/account-holder names)
-// meant for #20/#21 to consume internally, not for the Document wire type.
+// parsedData and resolvedHoldings are deliberately dropped here, not spread
+// through: they're internal ingest state (raw parser-service output, and
+// per-holding Asset match results) meant for #20/#21 to consume internally,
+// not for the Document wire type.
 function toDocument(row: typeof documents.$inferSelect): Document {
   return {
     id: row.id,

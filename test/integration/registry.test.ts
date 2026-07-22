@@ -44,7 +44,7 @@ describe("assets", () => {
 
     const created = await agent
       .post("/api/assets")
-      .send({ type: "stock", name: "Example Corp", ticker: "EX" })
+      .send({ type: "stock", name: "Example Corp", ticker: `EX-${randomUUID()}` })
       .expect(201);
 
     const list = await agent.get("/api/assets").expect(200);

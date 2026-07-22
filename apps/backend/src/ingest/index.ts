@@ -1,7 +1,14 @@
 // The api <-> ingest contract — see ADR 0002 and ADR 0003.
 import { findActiveDuplicate, findDocumentById } from "../shared/db/documents.js";
 import { readDocumentFile } from "../shared/storage.js";
-import { storeParsedData, transitionDocument, transitionDocumentWithFailure } from "./documents.js";
+import { resolveAssets } from "./assetResolution.js";
+import {
+  storeParsedData,
+  storeResolvedHoldings,
+  transitionDocument,
+  transitionDocumentToNeedsReview,
+  transitionDocumentWithFailure,
+} from "./documents.js";
 import { parseDocument } from "./parserClient.js";
 
 export interface IngestModule {
@@ -39,10 +46,23 @@ export const ingest: IngestModule = {
       return;
     }
 
-    // Not driven any further than this: needs_review (#20 — Asset
-    // resolution) and committed (#21 — Snapshot/Holding creation) both
-    // require pipeline stages that don't exist yet. Document stays
-    // "processing" with its parsed data stashed until they do.
     await storeParsedData(documentId, result.data);
+
+    const resolution = await resolveAssets(result.data);
+    if (resolution === null) {
+      // Recognized institution, but ingest couldn't understand the shape —
+      // a real integration failure, not a "nothing matched" outcome.
+      await transitionDocumentWithFailure(documentId, "parsed data was not in the expected shape");
+      return;
+    }
+    if (resolution.hasUnmatched) {
+      await transitionDocumentToNeedsReview(documentId, resolution.resolvedAssetIds);
+      return;
+    }
+
+    // Not driven any further than this: committed (#21 — Snapshot/Holding
+    // creation) requires a pipeline stage that doesn't exist yet. Document
+    // stays "processing" with its resolved holdings stashed until it does.
+    await storeResolvedHoldings(documentId, resolution.resolvedAssetIds);
   },
 };

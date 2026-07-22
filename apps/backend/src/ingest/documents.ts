@@ -58,14 +58,52 @@ export async function transitionDocumentWithFailure(documentId: string, reason: 
   return updated;
 }
 
-// A successful parse alone can't honestly reach needs_review (#20 — Asset
-// resolution) or committed (#21 — Snapshot/Holding creation), so the
-// Document stays "processing"; this just stashes the result for those
-// issues to pick up.
+// A successful parse alone can't honestly reach needs_review or committed
+// yet — Asset resolution (#20) hasn't run, so the Document stays
+// "processing"; this just stashes the raw result for it to pick up.
 export async function storeParsedData(documentId: string, data: unknown) {
   const [updated] = await db
     .update(documents)
     .set({ parsedData: data })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return updated;
+}
+
+// All holdings auto-matched (or there were none) — nothing for a human to
+// review, but #21 (Snapshot/Holding creation) hasn't run yet, so the
+// Document stays "processing" with the match results stashed alongside
+// parsedData.
+export async function storeResolvedHoldings(
+  documentId: string,
+  resolvedAssetIds: (string | null)[],
+) {
+  const [updated] = await db
+    .update(documents)
+    .set({ resolvedHoldings: resolvedAssetIds })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return updated;
+}
+
+// At least one holding couldn't be confidently matched — per ADR-0010, that
+// holds the Document for human confirmation rather than guessing or
+// auto-creating an Asset.
+export async function transitionDocumentToNeedsReview(
+  documentId: string,
+  resolvedAssetIds: (string | null)[],
+) {
+  const document = await findDocumentById(documentId);
+  if (!document) {
+    throw new Error(`Document ${documentId} not found`);
+  }
+  if (!TRANSITIONS[document.status].includes("needs_review")) {
+    throw new IllegalDocumentTransitionError(document.status, "needs_review");
+  }
+
+  const [updated] = await db
+    .update(documents)
+    .set({ status: "needs_review", resolvedHoldings: resolvedAssetIds })
     .where(eq(documents.id, documentId))
     .returning();
   return updated;

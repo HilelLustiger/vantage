@@ -12,13 +12,15 @@ dotenv.config({ path: path.resolve(process.cwd(), "../.env") });
 // shouldn't depend on the actual Python service (or docker) being up. A
 // minimal stand-in that always reports a successful, empty parse exercises
 // the real request/response wire format; PARSER_URL is pointed at it for
-// this run, overriding whatever .env/CI set.
+// this run, overriding whatever .env/CI set. `holdings: []` (not `{}`) so
+// #20's asset-resolution step, which validates this shape, doesn't reject
+// it as malformed.
 let fakeParser: Server;
 
 beforeAll(async () => {
   fakeParser = createServer((_req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, data: {} }));
+    res.end(JSON.stringify({ ok: true, data: { holdings: [] } }));
   });
   await new Promise<void>((resolve) => fakeParser.listen(0, resolve));
   const { port } = fakeParser.address() as { port: number };

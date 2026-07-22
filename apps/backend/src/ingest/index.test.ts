@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { createAccountWithOwners } from "../shared/db/accounts.js";
+import { createAsset } from "../shared/db/assets.js";
 import { db } from "../shared/db/client.js";
 import { findDocumentById, insertDocument } from "../shared/db/documents.js";
 import { createInstitution } from "../shared/db/institutions.js";
@@ -15,7 +16,7 @@ vi.mock("../shared/storage.js", () => ({
   readDocumentFile: vi.fn().mockResolvedValue(Buffer.from("not a real pdf")),
 }));
 vi.mock("./parserClient.js", () => ({
-  parseDocument: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+  parseDocument: vi.fn().mockResolvedValue({ ok: true, data: { holdings: [] } }),
 }));
 
 async function createTestAccount() {
@@ -92,10 +93,30 @@ describe("ingest.startImport", () => {
     await expect(ingest.startImport(randomUUID())).rejects.toThrow("not found");
   });
 
-  it("stores the parsed data and stays in processing on a successful parse", async () => {
+  it("stores the parsed data and stays in processing when there are no holdings to resolve", async () => {
+    const holdings: unknown[] = [];
+    vi.mocked(parseDocument).mockResolvedValueOnce({ ok: true, data: { holdings } });
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await ingest.startImport(document.id);
+
+    expect((await findDocumentById(document.id))?.status).toBe("processing");
+    const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
+    expect(row.parsedData).toEqual({ holdings: [] });
+    expect(row.resolvedHoldings).toEqual([]);
+  });
+
+  it("stays in processing and resolves a holding that matches an existing Asset by ticker", async () => {
+    const ticker = `TICK-${randomUUID()}`;
+    const asset = await createAsset({ type: "stock", name: "Example Corp", ticker });
     vi.mocked(parseDocument).mockResolvedValueOnce({
       ok: true,
-      data: { holdings: ["fake-holding"] },
+      data: {
+        holdings: [
+          { assetName: "Example Corp", quantity: "10", value: "1000", currency: "ILS", ticker },
+        ],
+      },
     });
     const account = await createTestAccount();
     const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
@@ -104,7 +125,41 @@ describe("ingest.startImport", () => {
 
     expect((await findDocumentById(document.id))?.status).toBe("processing");
     const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
-    expect(row.parsedData).toEqual({ holdings: ["fake-holding"] });
+    expect(row.resolvedHoldings).toEqual([asset.id]);
+  });
+
+  it("transitions to needs_review when a holding can't be confidently matched", async () => {
+    vi.mocked(parseDocument).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        holdings: [
+          { assetName: "Unrecognized Fund", quantity: "1", value: "1000", currency: "ILS" },
+        ],
+      },
+    });
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await ingest.startImport(document.id);
+
+    expect((await findDocumentById(document.id))?.status).toBe("needs_review");
+    const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
+    expect(row.resolvedHoldings).toEqual([null]);
+  });
+
+  it("transitions to failed when the parsed data doesn't match the expected shape", async () => {
+    vi.mocked(parseDocument).mockResolvedValueOnce({
+      ok: true,
+      data: { unexpected: "shape" },
+    });
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await ingest.startImport(document.id);
+
+    const final = await findDocumentById(document.id);
+    expect(final?.status).toBe("failed");
+    expect(final?.failureReason).toBe("parsed data was not in the expected shape");
   });
 
   it("transitions to failed with the reason on an unsuccessful parse", async () => {

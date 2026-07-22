@@ -10,7 +10,9 @@ import { createUser } from "../shared/db/users.js";
 import {
   IllegalDocumentTransitionError,
   storeParsedData,
+  storeResolvedHoldings,
   transitionDocument,
+  transitionDocumentToNeedsReview,
   transitionDocumentWithFailure,
 } from "./documents.js";
 
@@ -110,5 +112,41 @@ describe("storeParsedData", () => {
     expect(updated.status).toBe("processing");
     const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
     expect(row.parsedData).toEqual({ holdings: ["fake"] });
+  });
+});
+
+describe("storeResolvedHoldings", () => {
+  it("stashes the resolved asset ids without changing status", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await transitionDocument(document.id, "processing");
+
+    const updated = await storeResolvedHoldings(document.id, ["asset-1", null]);
+
+    expect(updated.status).toBe("processing");
+    const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
+    expect(row.resolvedHoldings).toEqual(["asset-1", null]);
+  });
+});
+
+describe("transitionDocumentToNeedsReview", () => {
+  it("transitions to needs_review and records the resolved holdings", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await transitionDocument(document.id, "processing");
+
+    const updated = await transitionDocumentToNeedsReview(document.id, [null]);
+
+    expect(updated.status).toBe("needs_review");
+    expect(updated.resolvedHoldings).toEqual([null]);
+  });
+
+  it("rejects a transition not in the graph", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await expect(transitionDocumentToNeedsReview(document.id, [null])).rejects.toThrow(
+      IllegalDocumentTransitionError,
+    );
   });
 });

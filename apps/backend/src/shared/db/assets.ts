@@ -32,3 +32,14 @@ export async function findAssetById(id: string) {
 export async function listAssets() {
   return (await db.select().from(assets)).map(toAsset);
 }
+
+// Returns all matches, not just one — ticker/isin have no unique constraint
+// (ADR-0008: duplicate Assets are possible). The caller decides what to do
+// with more than one match; this just reports what's in the registry.
+export async function findAssetsByTicker(ticker: string) {
+  return (await db.select().from(assets).where(eq(assets.ticker, ticker))).map(toAsset);
+}
+
+export async function findAssetsByIsin(isin: string) {
+  return (await db.select().from(assets).where(eq(assets.isin, isin))).map(toAsset);
+}
