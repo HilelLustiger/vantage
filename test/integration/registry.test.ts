@@ -121,3 +121,21 @@ describe("accounts", () => {
     await request(app).get("/api/accounts").expect(401);
   });
 });
+
+describe("users", () => {
+  it("lists users without exposing passwordHash", async () => {
+    const app = createApp();
+    const { agent, userId } = await loginAsNewUser(app);
+
+    const list = await agent.get("/api/users").expect(200);
+
+    const self = list.body.find((u: { id: string }) => u.id === userId);
+    expect(self).toBeDefined();
+    expect(self).not.toHaveProperty("passwordHash");
+  });
+
+  it("rejects unauthenticated requests", async () => {
+    const app = createApp();
+    await request(app).get("/api/users").expect(401);
+  });
+});

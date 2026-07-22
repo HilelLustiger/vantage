@@ -7,6 +7,7 @@ import { assetsRouter } from "./api/assets.js";
 import { documentsRouter } from "./api/documents.js";
 import { snapshotsRouter } from "./api/snapshots.js";
 import { portfolioRouter } from "./api/portfolio.js";
+import { usersRouter } from "./api/users.js";
 
 export function createApp() {
   const app = express();
@@ -25,6 +26,7 @@ export function createApp() {
   app.use("/api/documents", documentsRouter);
   app.use("/api/snapshots", snapshotsRouter);
   app.use("/api/portfolio", portfolioRouter);
+  app.use("/api/users", usersRouter);
 
   return app;
 }

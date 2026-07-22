@@ -1,9 +1,17 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { LayoutDashboard, Landmark, PieChart, Upload, LogOut } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 
+const navItems = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/accounts", label: "Accounts", icon: Landmark, end: false },
+  { to: "/assets", label: "Assets", icon: PieChart, end: false },
+  { to: "/import", label: "Import", icon: Upload, end: false },
+];
+
 const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
-  `rounded-md px-3 py-2 text-sm font-medium ${
-    isActive ? "bg-gray-900 text-white" : "text-gray-700 hover:bg-gray-100"
+  `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
+    isActive ? "bg-emerald-600 text-white" : "text-gray-600 hover:bg-gray-100"
   }`;
 
 export function Layout() {
@@ -16,31 +24,29 @@ export function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-        <div className="flex items-center gap-2">
-          <span className="mr-4 text-sm font-semibold text-gray-900">Vantage</span>
-          <NavLink to="/" end className={navLinkClasses}>
-            Dashboard
-          </NavLink>
-          <NavLink to="/accounts" className={navLinkClasses}>
-            Accounts
-          </NavLink>
-          <NavLink to="/import" className={navLinkClasses}>
-            Import
-          </NavLink>
-        </div>
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          <span>{user?.email}</span>
+    <div className="flex min-h-screen bg-gray-50">
+      <aside className="flex w-64 flex-col border-r border-gray-200 bg-white px-4 py-6">
+        <div className="mb-8 px-2 text-lg font-semibold text-gray-900">Vantage</div>
+        <nav className="flex flex-1 flex-col gap-1">
+          {navItems.map(({ to, label, icon: Icon, end }) => (
+            <NavLink key={to} to={to} end={end} className={navLinkClasses}>
+              <Icon size={18} />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="mt-6 border-t border-gray-200 pt-4">
+          <p className="truncate px-2 text-sm text-gray-600">{user?.email}</p>
           <button
             onClick={handleLogout}
-            className="rounded-md px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100"
+            className="mt-2 flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
           >
+            <LogOut size={18} />
             Log out
           </button>
         </div>
-      </nav>
-      <main className="p-6">
+      </aside>
+      <main className="flex-1 overflow-y-auto p-8">
         <Outlet />
       </main>
     </div>
