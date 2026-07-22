@@ -50,6 +50,13 @@
       "when": 1784757968093,
       "tag": "0006_light_ego",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784759528652,
+      "tag": "0007_sparkling_bloodaxe",
+      "breakpoints": true
     }
   ]
 }

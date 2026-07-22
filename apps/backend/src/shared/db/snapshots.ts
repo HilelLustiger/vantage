@@ -64,3 +64,22 @@ export async function findSnapshotVisibleToUser(snapshotId: string, userId: stri
     .where(and(eq(snapshots.id, snapshotId), eq(accountUsers.userId, userId)));
   return row && toSnapshot(row.snapshot);
 }
+
+// One Snapshot per Account — the active one with the max asOfDate. An
+// Account can have several active Snapshots simultaneously (supersede only
+// applies within the same Account+date, ADR-0009), so "latest active" is
+// not the same as "the only active one" (docs/DOMAIN.md's Portfolio
+// definition). Reduced in JS rather than a window-function query — data
+// volume at this app's scale doesn't justify the added complexity.
+export async function findLatestActiveSnapshotsForUser(userId: string): Promise<Snapshot[]> {
+  const active = await listSnapshotsForUser(userId);
+
+  const latestByAccount = new Map<string, Snapshot>();
+  for (const snapshot of active) {
+    const current = latestByAccount.get(snapshot.accountId);
+    if (!current || snapshot.asOfDate > current.asOfDate) {
+      latestByAccount.set(snapshot.accountId, snapshot);
+    }
+  }
+  return [...latestByAccount.values()];
+}

@@ -7,6 +7,7 @@ import { createInstitution } from "./institutions.js";
 import { snapshots } from "./schema.js";
 import {
   findActiveSnapshot,
+  findLatestActiveSnapshotsForUser,
   findSnapshotById,
   findSnapshotVisibleToUser,
   listSnapshotsForUser,
@@ -179,5 +180,51 @@ describe("findSnapshotVisibleToUser", () => {
     const row = await createSnapshotRow(account.id, document.id);
 
     await expect(findSnapshotVisibleToUser(row.id, outsider.id)).resolves.toBeUndefined();
+  });
+});
+
+describe("findLatestActiveSnapshotsForUser", () => {
+  it("picks the max-asOfDate active snapshot per account", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccountForUser(user.id);
+    const olderDoc = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    const newerDoc = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await createSnapshotRow(account.id, olderDoc.id, { asOfDate: "2025-12-31" });
+    const newer = await createSnapshotRow(account.id, newerDoc.id, { asOfDate: "2026-03-31" });
+
+    const result = await findLatestActiveSnapshotsForUser(user.id);
+
+    expect(result.map((s) => s.id)).toEqual([newer.id]);
+  });
+
+  it("ignores superseded snapshots", async () => {
+    const user = await createTestUser();
+    const account = await createTestAccountForUser(user.id);
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await createSnapshotRow(account.id, document.id, {
+      asOfDate: "2026-06-30",
+      isActive: false,
+    });
+
+    await expect(findLatestActiveSnapshotsForUser(user.id)).resolves.toEqual([]);
+  });
+
+  it("returns one snapshot per account, scoped to the calling user", async () => {
+    const user = await createTestUser();
+    const accountA = await createTestAccountForUser(user.id);
+    const accountB = await createTestAccountForUser(user.id);
+    const otherUser = await createTestUser();
+    const otherAccount = await createTestAccountForUser(otherUser.id);
+
+    const docA = await insertDocument({ accountId: accountA.id, checksum: randomUUID() });
+    const docB = await insertDocument({ accountId: accountB.id, checksum: randomUUID() });
+    const otherDoc = await insertDocument({ accountId: otherAccount.id, checksum: randomUUID() });
+    const snapshotA = await createSnapshotRow(accountA.id, docA.id);
+    const snapshotB = await createSnapshotRow(accountB.id, docB.id);
+    await createSnapshotRow(otherAccount.id, otherDoc.id);
+
+    const result = await findLatestActiveSnapshotsForUser(user.id);
+
+    expect(new Set(result.map((s) => s.id))).toEqual(new Set([snapshotA.id, snapshotB.id]));
   });
 });

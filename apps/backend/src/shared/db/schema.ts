@@ -1,4 +1,14 @@
-import { pgTable, text, timestamp, json, primaryKey, date, boolean, numeric } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  json,
+  primaryKey,
+  date,
+  boolean,
+  numeric,
+  unique,
+} from "drizzle-orm/pg-core";
 import type {
   AssetType,
   DocumentFeature,
@@ -137,3 +147,22 @@ export const holdings = pgTable("holdings", {
   value: numeric("value").notNull(),
   currency: text("currency").notNull(),
 });
+
+// See docs/ADR/0012-multi-currency-store-original-convert-at-read.md: a
+// local cache of fetched Frankfurter rates, keyed by the *requested* date
+// (not whatever nearby trading day Frankfurter substitutes internally) so
+// repeated lookups for the same date are predictable and hit the cache.
+// Purely backend infrastructure — never part of shared-types/the wire.
+export const fxRates = pgTable(
+  "fx_rates",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    date: date("date", { mode: "string" }).notNull(),
+    fromCurrency: text("from_currency").notNull(),
+    toCurrency: text("to_currency").notNull(),
+    rate: numeric("rate").notNull(),
+  },
+  (t) => ({ unique: unique().on(t.date, t.fromCurrency, t.toCurrency) }),
+);
