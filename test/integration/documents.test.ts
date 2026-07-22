@@ -5,8 +5,10 @@ import { createApp } from "@vantage/backend/app";
 import { createUser } from "@vantage/backend/db/users";
 import { hashPassword } from "@vantage/backend/password";
 
-// A minimal valid PDF — nothing parses it yet (that's M4), it just needs to
-// pass the fileFilter's mimetype check and be storable as bytes.
+// A minimal valid PDF — real parsing (M4) doesn't run against it; the fake
+// parser stand-in in vitest.setup.ts responds for any upload regardless of
+// content, so this just needs to pass the fileFilter's mimetype check and
+// be storable as bytes.
 const PDF_BYTES = Buffer.from("%PDF-1.4\n%%EOF");
 
 async function loginAsNewUser(app: ReturnType<typeof createApp>) {
@@ -32,7 +34,7 @@ async function createAccount(agent: ReturnType<typeof request.agent>) {
 }
 
 describe("document upload", () => {
-  it("stores the file and starts import, ending up processing", async () => {
+  it("stores the file and starts import, ending up committed", async () => {
     const app = createApp();
     const agent = await loginAsNewUser(app);
     const accountId = await createAccount(agent);
@@ -44,7 +46,7 @@ describe("document upload", () => {
       .expect(201);
 
     expect(res.body.accountId).toBe(accountId);
-    expect(res.body.status).toBe("processing");
+    expect(res.body.status).toBe("committed");
     expect(res.body.format).toBe("pdf");
     expect(res.body.feature).toBe("investments");
   });
@@ -87,7 +89,7 @@ describe("document upload", () => {
       .attach("file", PDF_BYTES, { filename: "statement.pdf", contentType: "application/pdf" })
       .expect(201);
 
-    expect(second.body.status).toBe("processing");
+    expect(second.body.status).toBe("committed");
   });
 
   it("rejects a non-PDF file", async () => {

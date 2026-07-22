@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, json, primaryKey, date } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, json, primaryKey, date, boolean, numeric } from "drizzle-orm/pg-core";
 import type {
   AssetType,
   DocumentFeature,
@@ -96,4 +96,44 @@ export const documents = pgTable("documents", {
   // positionally aligned with parsedData's holdings array. Internal only,
   // same reasoning as parsedData; #21/#10 consume this.
   resolvedHoldings: json("resolved_holdings"),
+});
+
+// See docs/ADR/0009-snapshot-immutability-and-supersede.md: immutable once
+// created, a re-import for the same Account+date supersedes rather than
+// overwrites. supersededBySnapshotId has no .references() — it's a nullable
+// self-reference to a row that doesn't exist yet at insert time; enforced
+// at the app layer (ingest/snapshotCreation.ts) instead of a deferred FK.
+export const snapshots = pgTable("snapshots", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  accountId: text("account_id")
+    .notNull()
+    .references(() => accounts.id),
+  documentId: text("document_id")
+    .notNull()
+    .references(() => documents.id),
+  asOfDate: date("as_of_date", { mode: "string" }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  supersededBySnapshotId: text("superseded_by_snapshot_id"),
+});
+
+// See docs/ADR/0012-multi-currency-store-original-convert-at-read.md:
+// value stored in whatever currency was parsed, never converted at write
+// time. quantity/value use `numeric`, not `text` — a real Postgres numeric
+// type, while drizzle's default mode still returns a string, matching
+// Holding.quantity/value's shared-types shape exactly.
+export const holdings = pgTable("holdings", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  snapshotId: text("snapshot_id")
+    .notNull()
+    .references(() => snapshots.id),
+  assetId: text("asset_id")
+    .notNull()
+    .references(() => assets.id),
+  quantity: numeric("quantity").notNull(),
+  value: numeric("value").notNull(),
+  currency: text("currency").notNull(),
 });

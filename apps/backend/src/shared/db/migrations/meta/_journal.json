@@ -43,6 +43,13 @@
       "when": 1784756985495,
       "tag": "0005_messy_texas_twister",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784757968093,
+      "tag": "0006_light_ego",
+      "breakpoints": true
     }
   ]
 }

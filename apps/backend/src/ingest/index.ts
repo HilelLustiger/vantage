@@ -10,6 +10,7 @@ import {
   transitionDocumentWithFailure,
 } from "./documents.js";
 import { parseDocument } from "./parserClient.js";
+import { commitSnapshot } from "./snapshotCreation.js";
 
 export interface IngestModule {
   startImport(documentId: string): Promise<void>;
@@ -60,9 +61,16 @@ export const ingest: IngestModule = {
       return;
     }
 
-    // Not driven any further than this: committed (#21 — Snapshot/Holding
-    // creation) requires a pipeline stage that doesn't exist yet. Document
-    // stays "processing" with its resolved holdings stashed until it does.
     await storeResolvedHoldings(documentId, resolution.resolvedAssetIds);
+
+    const commit = await commitSnapshot(
+      documentId,
+      document.accountId,
+      result.data,
+      resolution.resolvedAssetIds,
+    );
+    if (!commit.ok) {
+      await transitionDocumentWithFailure(documentId, commit.reason);
+    }
   },
 };

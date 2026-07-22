@@ -5,8 +5,10 @@ import { createAccountWithOwners } from "../shared/db/accounts.js";
 import { createAsset } from "../shared/db/assets.js";
 import { db } from "../shared/db/client.js";
 import { findDocumentById, insertDocument } from "../shared/db/documents.js";
+import { listHoldingsForSnapshot } from "../shared/db/holdings.js";
 import { createInstitution } from "../shared/db/institutions.js";
 import { documents } from "../shared/db/schema.js";
+import { findActiveSnapshot } from "../shared/db/snapshots.js";
 import { createUser } from "../shared/db/users.js";
 import { transitionDocument } from "./documents.js";
 import { ingest } from "./index.js";
@@ -16,7 +18,9 @@ vi.mock("../shared/storage.js", () => ({
   readDocumentFile: vi.fn().mockResolvedValue(Buffer.from("not a real pdf")),
 }));
 vi.mock("./parserClient.js", () => ({
-  parseDocument: vi.fn().mockResolvedValue({ ok: true, data: { holdings: [] } }),
+  parseDocument: vi
+    .fn()
+    .mockResolvedValue({ ok: true, data: { asOfDate: "31.03.2026", holdings: [] } }),
 }));
 
 async function createTestAccount() {
@@ -33,13 +37,13 @@ async function createTestAccount() {
 }
 
 describe("ingest.startImport", () => {
-  it("moves a fresh upload to processing when no duplicate exists", async () => {
+  it("processes a fresh upload through to committed when no duplicate exists", async () => {
     const account = await createTestAccount();
     const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
 
     await ingest.startImport(document.id);
 
-    expect((await findDocumentById(document.id))?.status).toBe("processing");
+    expect((await findDocumentById(document.id))?.status).toBe("committed");
   });
 
   it("moves to duplicate when the checksum matches an active document on the same account", async () => {
@@ -54,7 +58,7 @@ describe("ingest.startImport", () => {
     expect((await findDocumentById(second.id))?.status).toBe("duplicate");
   });
 
-  it("proceeds to processing when the only checksum match is failed", async () => {
+  it("proceeds to committed when the only checksum match is failed", async () => {
     const account = await createTestAccount();
     const checksum = randomUUID();
     const first = await insertDocument({ accountId: account.id, checksum });
@@ -65,7 +69,7 @@ describe("ingest.startImport", () => {
     const second = await insertDocument({ accountId: account.id, checksum });
     await ingest.startImport(second.id);
 
-    expect((await findDocumentById(second.id))?.status).toBe("processing");
+    expect((await findDocumentById(second.id))?.status).toBe("committed");
   });
 
   it("does not match a duplicate checksum on a different account", async () => {
@@ -78,7 +82,7 @@ describe("ingest.startImport", () => {
     const second = await insertDocument({ accountId: accountB.id, checksum });
     await ingest.startImport(second.id);
 
-    expect((await findDocumentById(second.id))?.status).toBe("processing");
+    expect((await findDocumentById(second.id))?.status).toBe("committed");
   });
 
   it("throws for a document that isn't uploaded", async () => {
@@ -93,26 +97,25 @@ describe("ingest.startImport", () => {
     await expect(ingest.startImport(randomUUID())).rejects.toThrow("not found");
   });
 
-  it("stores the parsed data and stays in processing when there are no holdings to resolve", async () => {
-    const holdings: unknown[] = [];
-    vi.mocked(parseDocument).mockResolvedValueOnce({ ok: true, data: { holdings } });
+  it("stores the parsed data and reaches committed when there are no holdings to resolve", async () => {
     const account = await createTestAccount();
     const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
 
     await ingest.startImport(document.id);
 
-    expect((await findDocumentById(document.id))?.status).toBe("processing");
+    expect((await findDocumentById(document.id))?.status).toBe("committed");
     const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
-    expect(row.parsedData).toEqual({ holdings: [] });
+    expect(row.parsedData).toEqual({ asOfDate: "31.03.2026", holdings: [] });
     expect(row.resolvedHoldings).toEqual([]);
   });
 
-  it("stays in processing and resolves a holding that matches an existing Asset by ticker", async () => {
+  it("resolves a holding that matches an existing Asset by ticker and reaches committed", async () => {
     const ticker = `TICK-${randomUUID()}`;
     const asset = await createAsset({ type: "stock", name: "Example Corp", ticker });
     vi.mocked(parseDocument).mockResolvedValueOnce({
       ok: true,
       data: {
+        asOfDate: "31.03.2026",
         holdings: [
           { assetName: "Example Corp", quantity: "10", value: "1000", currency: "ILS", ticker },
         ],
@@ -123,15 +126,20 @@ describe("ingest.startImport", () => {
 
     await ingest.startImport(document.id);
 
-    expect((await findDocumentById(document.id))?.status).toBe("processing");
+    expect((await findDocumentById(document.id))?.status).toBe("committed");
     const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
     expect(row.resolvedHoldings).toEqual([asset.id]);
+    const snapshot = await findActiveSnapshot(account.id, "2026-03-31");
+    await expect(listHoldingsForSnapshot(snapshot!.id)).resolves.toEqual([
+      expect.objectContaining({ assetId: asset.id, quantity: "10", value: "1000" }),
+    ]);
   });
 
   it("transitions to needs_review when a holding can't be confidently matched", async () => {
     vi.mocked(parseDocument).mockResolvedValueOnce({
       ok: true,
       data: {
+        asOfDate: "31.03.2026",
         holdings: [
           { assetName: "Unrecognized Fund", quantity: "1", value: "1000", currency: "ILS" },
         ],
@@ -160,6 +168,21 @@ describe("ingest.startImport", () => {
     const final = await findDocumentById(document.id);
     expect(final?.status).toBe("failed");
     expect(final?.failureReason).toBe("parsed data was not in the expected shape");
+  });
+
+  it("transitions to failed when the statement date can't be parsed", async () => {
+    vi.mocked(parseDocument).mockResolvedValueOnce({
+      ok: true,
+      data: { asOfDate: "not a real date", holdings: [] },
+    });
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await ingest.startImport(document.id);
+
+    const final = await findDocumentById(document.id);
+    expect(final?.status).toBe("failed");
+    expect(final?.failureReason).toContain("not a real date");
   });
 
   it("transitions to failed with the reason on an unsuccessful parse", async () => {
