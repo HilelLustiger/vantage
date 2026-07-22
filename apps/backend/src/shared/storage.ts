@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,4 +12,8 @@ const UPLOAD_DIR = fileURLToPath(new URL("../../data/uploads", import.meta.url))
 export async function saveDocumentFile(documentId: string, file: Buffer): Promise<void> {
   await mkdir(UPLOAD_DIR, { recursive: true });
   await writeFile(path.join(UPLOAD_DIR, `${documentId}.pdf`), file);
+}
+
+export async function readDocumentFile(documentId: string): Promise<Buffer> {
+  return readFile(path.join(UPLOAD_DIR, `${documentId}.pdf`));
 }

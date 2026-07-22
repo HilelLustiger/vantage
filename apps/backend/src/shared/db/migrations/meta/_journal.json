@@ -29,6 +29,13 @@
       "when": 1784714228816,
       "tag": "0003_narrow_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784755719328,
+      "tag": "0004_nappy_kulan_gath",
+      "breakpoints": true
     }
   ]
 }

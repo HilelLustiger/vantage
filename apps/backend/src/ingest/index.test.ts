@@ -1,11 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { describe, expect, it, vi } from "vitest";
 import { createAccountWithOwners } from "../shared/db/accounts.js";
+import { db } from "../shared/db/client.js";
 import { findDocumentById, insertDocument } from "../shared/db/documents.js";
 import { createInstitution } from "../shared/db/institutions.js";
+import { documents } from "../shared/db/schema.js";
 import { createUser } from "../shared/db/users.js";
 import { transitionDocument } from "./documents.js";
 import { ingest } from "./index.js";
+import { parseDocument } from "./parserClient.js";
+
+vi.mock("../shared/storage.js", () => ({
+  readDocumentFile: vi.fn().mockResolvedValue(Buffer.from("not a real pdf")),
+}));
+vi.mock("./parserClient.js", () => ({
+  parseDocument: vi.fn().mockResolvedValue({ ok: true, data: {} }),
+}));
 
 async function createTestAccount() {
   const user = await createUser({
@@ -79,5 +90,35 @@ describe("ingest.startImport", () => {
 
   it("throws for a missing document", async () => {
     await expect(ingest.startImport(randomUUID())).rejects.toThrow("not found");
+  });
+
+  it("stores the parsed data and stays in processing on a successful parse", async () => {
+    vi.mocked(parseDocument).mockResolvedValueOnce({
+      ok: true,
+      data: { holdings: ["fake-holding"] },
+    });
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await ingest.startImport(document.id);
+
+    expect((await findDocumentById(document.id))?.status).toBe("processing");
+    const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
+    expect(row.parsedData).toEqual({ holdings: ["fake-holding"] });
+  });
+
+  it("transitions to failed with the reason on an unsuccessful parse", async () => {
+    vi.mocked(parseDocument).mockResolvedValueOnce({
+      ok: false,
+      reason: "no matching parser (unrecognized institution)",
+    });
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await ingest.startImport(document.id);
+
+    const final = await findDocumentById(document.id);
+    expect(final?.status).toBe("failed");
+    expect(final?.failureReason).toBe("no matching parser (unrecognized institution)");
   });
 });

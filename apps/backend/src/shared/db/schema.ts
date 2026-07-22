@@ -85,4 +85,11 @@ export const documents = pgTable("documents", {
   uploadedAt: timestamp("uploaded_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  // Raw parser-service output on a successful parse — internal only, never
+  // exposed on the Document wire type (see toDocument()). #20/#21 consume
+  // this to drive processing -> needs_review/committed.
+  parsedData: json("parsed_data"),
+  // The parser service's `reason` string on a failed parse. Short and
+  // non-PII, safe to expose on Document (unlike parsedData).
+  failureReason: text("failure_reason"),
 });

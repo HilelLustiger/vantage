@@ -75,6 +75,8 @@ export interface Document {
   dateRangeStart?: string;
   dateRangeEnd?: string;
   uploadedAt: string;
+  /** Why parsing failed, when status is "failed" — from the parser service. */
+  failureReason?: string;
 }
 
 export interface PortfolioLine {

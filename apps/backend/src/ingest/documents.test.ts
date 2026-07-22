@@ -1,10 +1,18 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createAccountWithOwners } from "../shared/db/accounts.js";
+import { db } from "../shared/db/client.js";
 import { insertDocument } from "../shared/db/documents.js";
 import { createInstitution } from "../shared/db/institutions.js";
+import { documents } from "../shared/db/schema.js";
 import { createUser } from "../shared/db/users.js";
-import { IllegalDocumentTransitionError, transitionDocument } from "./documents.js";
+import {
+  IllegalDocumentTransitionError,
+  storeParsedData,
+  transitionDocument,
+  transitionDocumentWithFailure,
+} from "./documents.js";
 
 async function createTestAccount() {
   const user = await createUser({
@@ -64,5 +72,43 @@ describe("transitionDocument", () => {
     await expect(transitionDocument(document.id, "processing")).rejects.toThrow(
       IllegalDocumentTransitionError,
     );
+  });
+});
+
+describe("transitionDocumentWithFailure", () => {
+  it("transitions to failed and records the reason", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await transitionDocument(document.id, "processing");
+
+    const updated = await transitionDocumentWithFailure(document.id, "unreadable file");
+
+    expect(updated.status).toBe("failed");
+    expect(updated.failureReason).toBe("unreadable file");
+  });
+
+  it("rejects a transition not in the graph", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await transitionDocument(document.id, "processing");
+    await transitionDocument(document.id, "committed");
+
+    await expect(transitionDocumentWithFailure(document.id, "too late")).rejects.toThrow(
+      IllegalDocumentTransitionError,
+    );
+  });
+});
+
+describe("storeParsedData", () => {
+  it("stashes the raw parse result without changing status", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await transitionDocument(document.id, "processing");
+
+    const updated = await storeParsedData(document.id, { holdings: ["fake"] });
+
+    expect(updated.status).toBe("processing");
+    const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
+    expect(row.parsedData).toEqual({ holdings: ["fake"] });
   });
 });
