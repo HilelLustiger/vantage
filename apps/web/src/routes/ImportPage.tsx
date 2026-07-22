@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { UploadCloud } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { Account, Document, DocumentStatus } from "@vantage/shared-types";
 import { Badge } from "../components/Badge";
 import { Card } from "../components/Card";
@@ -165,6 +166,7 @@ export function ImportPage() {
               <TableHeaderCell>Account</TableHeaderCell>
               <TableHeaderCell>Status</TableHeaderCell>
               <TableHeaderCell>Details</TableHeaderCell>
+              <TableHeaderCell>Action</TableHeaderCell>
             </tr>
           </TableHead>
           <TableBody>
@@ -177,6 +179,18 @@ export function ImportPage() {
                 </TableCell>
                 <TableCell className="text-gray-500">
                   {document.status === "failed" ? (document.failureReason ?? "—") : "—"}
+                </TableCell>
+                <TableCell>
+                  {document.status === "needs_review" ? (
+                    <Link
+                      to={`/import/${document.id}/review`}
+                      className="font-medium text-emerald-700 hover:text-emerald-800"
+                    >
+                      Review
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
               </tr>
             ))}

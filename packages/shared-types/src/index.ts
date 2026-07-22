@@ -91,3 +91,26 @@ export interface Portfolio {
   userId: string;
   lines: PortfolioLine[];
 }
+
+// The manual-confirmation flow for a needs_review Document — see ADR 0010.
+export interface DocumentReviewLine {
+  index: number;
+  assetName: string;
+  quantity: string;
+  value: string;
+  currency: string;
+  /** Set only when auto-matching already resolved this line — shown read-only. */
+  resolvedAssetId?: string;
+}
+
+export interface DocumentReview {
+  documentId: string;
+  lines: DocumentReviewLine[];
+}
+
+export type DocumentResolution =
+  | { index: number; assetId: string }
+  | {
+      index: number;
+      newAsset: { type: AssetType; name: string; ticker?: string; isin?: string };
+    };

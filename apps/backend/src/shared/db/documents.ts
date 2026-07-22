@@ -89,3 +89,23 @@ export async function findDocumentVisibleToUser(documentId: string, userId: stri
     .where(and(eq(documents.id, documentId), eq(accountUsers.userId, userId)));
   return row && toDocument(row.document);
 }
+
+// A deliberately narrow, separate accessor for the #10 review flow — the
+// only place parsedData/resolvedHoldings ever leave this module. Doesn't
+// touch toDocument()/the general Document type's "never expose these"
+// invariant. undefined if not visible, or not currently needs_review.
+export async function findNeedsReviewDetailVisibleToUser(documentId: string, userId: string) {
+  const [row] = await db
+    .select({ document: documents })
+    .from(documents)
+    .innerJoin(accountUsers, eq(accountUsers.accountId, documents.accountId))
+    .where(and(eq(documents.id, documentId), eq(accountUsers.userId, userId)));
+  if (!row || row.document.status !== "needs_review") {
+    return undefined;
+  }
+  return {
+    accountId: row.document.accountId,
+    parsedData: row.document.parsedData,
+    resolvedHoldings: row.document.resolvedHoldings as (string | null)[] | null,
+  };
+}

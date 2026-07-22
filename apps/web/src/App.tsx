@@ -6,6 +6,7 @@ import { DashboardPage } from "./routes/DashboardPage";
 import { AccountsPage } from "./routes/AccountsPage";
 import { AssetsPage } from "./routes/AssetsPage";
 import { ImportPage } from "./routes/ImportPage";
+import { ReviewDocumentPage } from "./routes/ReviewDocumentPage";
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="assets" element={<AssetsPage />} />
           <Route path="import" element={<ImportPage />} />
+          <Route path="import/:documentId/review" element={<ReviewDocumentPage />} />
         </Route>
       </Route>
     </Routes>

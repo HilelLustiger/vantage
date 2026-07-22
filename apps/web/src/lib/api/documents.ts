@@ -1,4 +1,4 @@
-import type { Document } from "@vantage/shared-types";
+import type { Document, DocumentResolution, DocumentReview } from "@vantage/shared-types";
 import { apiClient } from "../apiClient";
 
 export const documentsApi = {
@@ -9,4 +9,8 @@ export const documentsApi = {
     formData.set("file", file);
     return apiClient.postForm<Document>("/api/documents", formData);
   },
+  review: (documentId: string) =>
+    apiClient.get<DocumentReview>(`/api/documents/${documentId}/review`),
+  resolve: (documentId: string, resolutions: DocumentResolution[]) =>
+    apiClient.post<Document>(`/api/documents/${documentId}/resolve`, { resolutions }),
 };

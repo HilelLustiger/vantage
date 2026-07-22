@@ -44,9 +44,13 @@ export function Combobox({ options, value, onChange, placeholder }: ComboboxProp
         value={query}
         placeholder={placeholder}
         onChange={(e) => {
+          // Only the parent's onChange fires on an explicit selection
+          // (click an existing option, or "Create ...") — not on every
+          // keystroke. A caller reacting to onChange by switching UI mode
+          // (e.g. into a create-new form) shouldn't have that triggered by
+          // someone still mid-typing.
           setQuery(e.target.value);
           setIsOpen(true);
-          onChange({ id: null, label: e.target.value.trim() });
         }}
         onFocus={() => setIsOpen(true)}
         onBlur={() => setTimeout(() => setIsOpen(false), 100)}
