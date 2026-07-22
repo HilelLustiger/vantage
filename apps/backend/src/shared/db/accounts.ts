@@ -52,6 +52,11 @@ export async function listAccountsForUser(userId: string) {
   return getAccountsWithOwners(ownedRows.map((r) => r.accountId));
 }
 
+export async function findAccountById(accountId: string) {
+  const [account] = await getAccountsWithOwners([accountId]);
+  return account;
+}
+
 export async function findAccountVisibleToUser(accountId: string, userId: string) {
   const [ownedRow] = await db
     .select({ accountId: accountUsers.accountId })
