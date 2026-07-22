@@ -1,18 +1,36 @@
-import { and, eq, ne, notInArray } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
+import type { Document } from "@vantage/shared-types";
 import { db } from "./client.js";
-import { documents } from "./schema.js";
+import { accountUsers, documents } from "./schema.js";
 
-export async function insertDocument(input: { accountId: string; checksum: string }) {
+// Drizzle returns `uploadedAt` as a Date and null date-range columns as
+// null; Document models them as the wire/JSON shape (ISO strings, optional
+// fields) — normalize at the boundary, same pattern as assets.ts's toAsset().
+function toDocument(row: typeof documents.$inferSelect): Document {
+  return {
+    ...row,
+    dateRangeStart: row.dateRangeStart ?? undefined,
+    dateRangeEnd: row.dateRangeEnd ?? undefined,
+    uploadedAt: row.uploadedAt.toISOString(),
+  };
+}
+
+export async function insertDocument(input: {
+  accountId: string;
+  checksum: string;
+  dateRangeStart?: string;
+  dateRangeEnd?: string;
+}) {
   const [document] = await db
     .insert(documents)
     .values({ ...input, status: "uploaded" })
     .returning();
-  return document;
+  return toDocument(document);
 }
 
 export async function findDocumentById(id: string) {
   const [document] = await db.select().from(documents).where(eq(documents.id, id));
-  return document;
+  return document && toDocument(document);
 }
 
 // A checksum counts as a duplicate against another document for the same
@@ -34,5 +52,29 @@ export async function findActiveDuplicate(
         notInArray(documents.status, ["failed", "duplicate"]),
       ),
     );
-  return document;
+  return document && toDocument(document);
+}
+
+export async function listDocumentsForUser(userId: string) {
+  const ownedRows = await db
+    .select({ accountId: accountUsers.accountId })
+    .from(accountUsers)
+    .where(eq(accountUsers.userId, userId));
+  const accountIds = ownedRows.map((r) => r.accountId);
+  if (accountIds.length === 0) return [];
+
+  const rows = await db
+    .select()
+    .from(documents)
+    .where(inArray(documents.accountId, accountIds));
+  return rows.map(toDocument);
+}
+
+export async function findDocumentVisibleToUser(documentId: string, userId: string) {
+  const [row] = await db
+    .select({ document: documents })
+    .from(documents)
+    .innerJoin(accountUsers, eq(accountUsers.accountId, documents.accountId))
+    .where(and(eq(documents.id, documentId), eq(accountUsers.userId, userId)));
+  return row && toDocument(row.document);
 }

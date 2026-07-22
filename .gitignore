@@ -25,3 +25,6 @@ docs/UI-ideas.md
 
 # Drizzle migrations output is committed; local drizzle-kit cache is not
 .drizzle/
+
+# Uploaded document files — see apps/backend/src/shared/storage.ts
+apps/backend/data/

@@ -57,11 +57,23 @@ export type DocumentStatus =
   | "failed"
   | "duplicate";
 
+// PDF only for now — see ADR 0015. CSV later is just another format key.
+export type DocumentFormat = "pdf";
+
+// Which feature this Document belongs to — see ADR 0013. Only Investments
+// exists today; Transactions isn't designed yet.
+export type DocumentFeature = "investments" | "transactions";
+
 export interface Document {
   id: string;
   accountId: string;
   status: DocumentStatus;
   checksum: string;
+  format: DocumentFormat;
+  feature: DocumentFeature;
+  /** The statement's covered period, if supplied at upload time. */
+  dateRangeStart?: string;
+  dateRangeEnd?: string;
   uploadedAt: string;
 }
 

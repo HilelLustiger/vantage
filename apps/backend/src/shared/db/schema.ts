@@ -1,5 +1,10 @@
-import { pgTable, text, timestamp, json, primaryKey } from "drizzle-orm/pg-core";
-import type { AssetType, DocumentStatus } from "@vantage/shared-types";
+import { pgTable, text, timestamp, json, primaryKey, date } from "drizzle-orm/pg-core";
+import type {
+  AssetType,
+  DocumentFeature,
+  DocumentFormat,
+  DocumentStatus,
+} from "@vantage/shared-types";
 
 export const users = pgTable("users", {
   id: text("id")
@@ -70,6 +75,13 @@ export const documents = pgTable("documents", {
     .references(() => accounts.id),
   status: text("status").notNull().$type<DocumentStatus>(),
   checksum: text("checksum").notNull(),
+  format: text("format").notNull().$type<DocumentFormat>().default("pdf"),
+  feature: text("feature")
+    .notNull()
+    .$type<DocumentFeature>()
+    .default("investments"),
+  dateRangeStart: date("date_range_start", { mode: "string" }),
+  dateRangeEnd: date("date_range_end", { mode: "string" }),
   uploadedAt: timestamp("uploaded_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

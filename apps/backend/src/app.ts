@@ -4,6 +4,7 @@ import { authRouter } from "./api/auth.js";
 import { institutionsRouter } from "./api/institutions.js";
 import { accountsRouter } from "./api/accounts.js";
 import { assetsRouter } from "./api/assets.js";
+import { documentsRouter } from "./api/documents.js";
 
 export function createApp() {
   const app = express();
@@ -19,6 +20,7 @@ export function createApp() {
   app.use("/api/institutions", institutionsRouter);
   app.use("/api/accounts", accountsRouter);
   app.use("/api/assets", assetsRouter);
+  app.use("/api/documents", documentsRouter);
 
   return app;
 }
