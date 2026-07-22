@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, json, primaryKey } from "drizzle-orm/pg-core";
-import type { AssetType } from "@vantage/shared-types";
+import type { AssetType, DocumentStatus } from "@vantage/shared-types";
 
 export const users = pgTable("users", {
   id: text("id")
@@ -59,4 +59,18 @@ export const assets = pgTable("assets", {
   name: text("name").notNull(),
   ticker: text("ticker"),
   isin: text("isin"),
+});
+
+export const documents = pgTable("documents", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  accountId: text("account_id")
+    .notNull()
+    .references(() => accounts.id),
+  status: text("status").notNull().$type<DocumentStatus>(),
+  checksum: text("checksum").notNull(),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });

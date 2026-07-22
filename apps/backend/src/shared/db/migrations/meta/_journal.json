@@ -15,6 +15,13 @@
       "when": 1784708362489,
       "tag": "0001_black_whizzer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784712886021,
+      "tag": "0002_black_ultragirl",
+      "breakpoints": true
     }
   ]
 }
