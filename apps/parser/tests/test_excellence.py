@@ -1,7 +1,7 @@
 """Fabricated text mimicking the real Excellence (אקסלנס) brokerage-report
 column layout — fake security numbers/names/values, no real PII."""
 
-from parsers.excellence import extract_excellence_securities
+from excellence import extract_excellence_securities
 
 
 def test_itemized_holdings_reconcile_to_stated_total() -> None:

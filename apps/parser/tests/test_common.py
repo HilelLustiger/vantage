@@ -1,6 +1,6 @@
 from bidi.algorithm import get_display
 
-from parsers.common import fix_rtl, parse_amount, parse_pct
+from common import fix_rtl, parse_amount, parse_pct
 
 
 def test_fix_rtl_reorders_visual_order_to_logical_order() -> None:

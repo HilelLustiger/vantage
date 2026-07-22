@@ -1,7 +1,7 @@
 """Fabricated text mimicking the real Bank Hapoalim brokerage-report label
 structure — fake names/numbers, no real PII."""
 
-from parsers.hapoalim import extract_hapoalim_securities
+from hapoalim import extract_hapoalim_securities
 
 
 def test_joint_account_holders_and_balance() -> None:

@@ -4,7 +4,7 @@ periods. See docs/private-docs/auto-institution-detection.md and ADR-0021."""
 
 from typing import Any
 
-from .common import find, parse_amount, parse_pct
+from common import find, parse_amount, parse_pct
 
 
 def extract_gemel_statement(text: str, institution: str) -> dict[str, Any]:

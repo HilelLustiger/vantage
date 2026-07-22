@@ -2,7 +2,7 @@
 structure/format validated against real statements during the Phase 0 spike
 (sandbox/) — fake names, IDs, and amounts throughout, no real PII."""
 
-from parsers.gemel import extract_gemel_statement
+from gemel import extract_gemel_statement
 
 INSTITUTION = "בדיקה גמל ופנסיה"
 

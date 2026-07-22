@@ -8,7 +8,7 @@ value (ILS), % of portfolio. See docs/private-docs/auto-institution-detection.md
 import re
 from typing import Any
 
-from .common import find, parse_amount
+from common import find, parse_amount
 
 
 def extract_excellence_securities(text: str) -> dict[str, Any]:

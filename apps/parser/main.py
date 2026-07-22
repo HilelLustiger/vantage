@@ -4,8 +4,8 @@ import pdfplumber
 from fastapi import FastAPI, File, Form, UploadFile
 from pydantic import BaseModel
 
-from parsers.common import fix_rtl
-from parsers.registry import detect_and_extract
+from common import fix_rtl
+from registry import detect_and_extract
 
 app = FastAPI()
 

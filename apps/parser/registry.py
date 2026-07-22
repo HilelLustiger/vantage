@@ -6,9 +6,9 @@ boundary (ADR-0003)."""
 
 from typing import Any, Callable, TypedDict
 
-from .excellence import extract_excellence_securities
-from .gemel import extract_gemel_statement
-from .hapoalim import extract_hapoalim_securities
+from excellence import extract_excellence_securities
+from gemel import extract_gemel_statement
+from hapoalim import extract_hapoalim_securities
 
 
 class _Entry(TypedDict):

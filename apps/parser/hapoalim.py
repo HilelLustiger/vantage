@@ -5,7 +5,7 @@ See docs/private-docs/auto-institution-detection.md."""
 
 from typing import Any
 
-from .common import find
+from common import find
 
 
 def extract_hapoalim_securities(text: str) -> dict[str, Any]:

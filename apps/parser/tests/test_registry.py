@@ -1,4 +1,4 @@
-from parsers.registry import detect_and_extract
+from registry import detect_and_extract
 
 
 def test_unrecognized_content_returns_none() -> None:
