@@ -33,6 +33,7 @@ every implementation detail gets one.
 | [0018](0018-no-third-party-oauth.md) | No third-party OAuth |
 | [0019](0019-manual-password-reset.md) | No email-based password reset — manual/CLI reset instead |
 | [0020](0020-secrets-and-repo-visibility.md) | Git-ignored .env for secrets; private repo regardless of data sensitivity |
+| [0021](0021-automatic-institution-account-detection.md) | Automatic institution/account detection from statement content |
 
 ## Open Questions
 
