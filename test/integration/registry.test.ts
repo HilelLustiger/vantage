@@ -50,6 +50,11 @@ describe("assets", () => {
     const list = await agent.get("/api/assets").expect(200);
     expect(list.body.map((a: { id: string }) => a.id)).toContain(created.body.id);
   });
+
+  it("rejects unauthenticated requests", async () => {
+    const app = createApp();
+    await request(app).get("/api/assets").expect(401);
+  });
 });
 
 describe("accounts", () => {
@@ -109,5 +114,10 @@ describe("accounts", () => {
       .post("/api/accounts")
       .send({ institutionId: randomUUID(), name: "Ghost Account" })
       .expect(400);
+  });
+
+  it("rejects unauthenticated requests", async () => {
+    const app = createApp();
+    await request(app).get("/api/accounts").expect(401);
   });
 });
