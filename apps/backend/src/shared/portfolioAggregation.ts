@@ -1,9 +1,12 @@
-import type { PortfolioLine } from "@vantage/shared-types";
+import type { CurrencyBreakdownLine, PortfolioLine } from "@vantage/shared-types";
 
 export interface ConvertedHolding {
   assetId: string;
   quantity: string;
   value: string;
+  // The Holding's original currency — unused by aggregateHoldings (grouped
+  // by Asset instead), but needed by aggregateByCurrency below.
+  currency: string;
   // Already-converted value's rate relative to the original holding
   // value — applied here, not stored (ADR-0012: convert at read time).
   rate: number;
@@ -29,4 +32,28 @@ export function aggregateHoldings(
     value: String(totals.value),
     currency,
   }));
+}
+
+// Groups holdings by their ORIGINAL currency (ADR-0022) — `value` per
+// bucket stays raw/unconverted, since the point is showing what's actually
+// held in each currency. `percentageOfPortfolio` still needs the converted
+// totals as a comparable denominator across buckets.
+export function aggregateByCurrency(holdings: ConvertedHolding[]): CurrencyBreakdownLine[] {
+  const byCurrency = new Map<string, { raw: number; converted: number }>();
+  let totalConverted = 0;
+  for (const holding of holdings) {
+    const convertedValue = Number(holding.value) * holding.rate;
+    totalConverted += convertedValue;
+    const existing = byCurrency.get(holding.currency) ?? { raw: 0, converted: 0 };
+    existing.raw += Number(holding.value);
+    existing.converted += convertedValue;
+    byCurrency.set(holding.currency, existing);
+  }
+  return [...byCurrency.entries()]
+    .map(([currency, totals]) => ({
+      currency,
+      value: String(totals.raw),
+      percentageOfPortfolio: totalConverted === 0 ? 0 : (totals.converted / totalConverted) * 100,
+    }))
+    .sort((a, b) => b.percentageOfPortfolio - a.percentageOfPortfolio);
 }

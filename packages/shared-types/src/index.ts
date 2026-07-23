@@ -92,6 +92,54 @@ export interface Portfolio {
   lines: PortfolioLine[];
 }
 
+// See ADR 0022: breakdown of the aggregate Portfolio by each Holding's
+// original currency — `value` stays raw/unconverted per bucket, only
+// `percentageOfPortfolio` needs a conversion to be comparable across
+// currencies.
+export interface CurrencyBreakdownLine {
+  currency: string;
+  value: string;
+  percentageOfPortfolio: number;
+}
+
+export interface CurrencyBreakdown {
+  userId: string;
+  lines: CurrencyBreakdownLine[];
+}
+
+// Net worth over time — one point per distinct Snapshot event date across
+// every Account, carrying forward each Account's latest Snapshot as-of
+// that date. `value` is converted to the requested display currency using
+// that point's own date's exchange rate — see ADR 0012.
+export interface PortfolioHistoryPoint {
+  date: string;
+  value: string;
+}
+
+export interface PortfolioHistory {
+  userId: string;
+  points: PortfolioHistoryPoint[];
+}
+
+// Entity-level, native-currency holdings view — see ADR 0022. Never
+// converted, so no display-currency concept applies here at all.
+export interface AssetCurrencyValue {
+  currency: string;
+  value: string;
+}
+
+export interface AssetHoldingBreakdown {
+  assetId: string;
+  /** Summed across every Account/currency — share count, not money. */
+  quantity: string;
+  valuesByCurrency: AssetCurrencyValue[];
+}
+
+export interface PortfolioByAsset {
+  userId: string;
+  assets: AssetHoldingBreakdown[];
+}
+
 // The manual-confirmation flow for a needs_review Document — see ADR 0010.
 export interface DocumentReviewLine {
   index: number;

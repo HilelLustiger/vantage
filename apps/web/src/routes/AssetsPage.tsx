@@ -1,27 +1,49 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
-import type { Asset, AssetType } from "@vantage/shared-types";
+import type { Asset, AssetHoldingBreakdown, AssetType } from "@vantage/shared-types";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Modal } from "../components/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell } from "../components/Table";
 import { assetsApi } from "../lib/api/assets";
+import { portfolioApi } from "../lib/api/portfolio";
 
 const ASSET_TYPES: AssetType[] = ["stock", "etf", "mutual_fund", "bond", "cash"];
 
+function formatMoney(value: number, currency: string) {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value);
+}
+
 export function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [holdings, setHoldings] = useState<AssetHoldingBreakdown[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   async function refresh() {
-    setAssets(await assetsApi.list());
+    const [assetList, byAsset] = await Promise.all([assetsApi.list(), portfolioApi.byAsset()]);
+    setAssets(assetList);
+    setHoldings(byAsset.assets);
   }
 
   useEffect(() => {
     refresh().finally(() => setIsLoading(false));
   }, []);
+
+  const holdingsByAssetId = new Map(holdings.map((h) => [h.assetId, h]));
+
+  // Held Assets first (by total quantity desc — currency-agnostic, unlike
+  // value which can't be compared across currencies without conversion,
+  // see ADR-0022), unheld Assets after, in registry order.
+  const sortedAssets = [...assets].sort((a, b) => {
+    const qa = Number(holdingsByAssetId.get(a.id)?.quantity ?? 0);
+    const qb = Number(holdingsByAssetId.get(b.id)?.quantity ?? 0);
+    if (qa === 0 && qb === 0) return 0;
+    if (qa === 0) return 1;
+    if (qb === 0) return -1;
+    return qb - qa;
+  });
 
   return (
     <div>
@@ -41,19 +63,32 @@ export function AssetsPage() {
               <TableHeaderCell>Type</TableHeaderCell>
               <TableHeaderCell>Ticker</TableHeaderCell>
               <TableHeaderCell>ISIN</TableHeaderCell>
+              <TableHeaderCell>Quantity</TableHeaderCell>
+              <TableHeaderCell>Value</TableHeaderCell>
             </tr>
           </TableHead>
           <TableBody>
-            {assets.map((asset) => (
-              <tr key={asset.id}>
-                <TableCell className="font-medium text-gray-900">{asset.name}</TableCell>
-                <TableCell>
-                  <Badge>{asset.type}</Badge>
-                </TableCell>
-                <TableCell>{asset.ticker ?? "—"}</TableCell>
-                <TableCell>{asset.isin ?? "—"}</TableCell>
-              </tr>
-            ))}
+            {sortedAssets.map((asset) => {
+              const holding = holdingsByAssetId.get(asset.id);
+              return (
+                <tr key={asset.id}>
+                  <TableCell className="font-medium text-gray-900">{asset.name}</TableCell>
+                  <TableCell>
+                    <Badge>{asset.type}</Badge>
+                  </TableCell>
+                  <TableCell>{asset.ticker ?? "—"}</TableCell>
+                  <TableCell>{asset.isin ?? "—"}</TableCell>
+                  <TableCell>{holding?.quantity ?? "—"}</TableCell>
+                  <TableCell>
+                    {holding && holding.valuesByCurrency.length > 0
+                      ? holding.valuesByCurrency
+                          .map((v) => formatMoney(Number(v.value), v.currency))
+                          .join(" · ")
+                      : "—"}
+                  </TableCell>
+                </tr>
+              );
+            })}
           </TableBody>
         </Table>
         {!isLoading && assets.length === 0 && (

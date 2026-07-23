@@ -84,3 +84,84 @@ describe("portfolio aggregation", () => {
     await request(app).get("/api/portfolio").expect(401);
   });
 });
+
+describe("GET /api/portfolio/currency-breakdown", () => {
+  it("returns an empty breakdown when nothing has been imported", async () => {
+    const app = createApp();
+    const agent = await loginAsNewUser(app);
+
+    const res = await agent.get("/api/portfolio/currency-breakdown").expect(200);
+
+    expect(res.body).toEqual({ userId: expect.any(String), lines: [] });
+  });
+
+  it("does not include another user's accounts", async () => {
+    const app = createApp();
+    const owner = await loginAsNewUser(app);
+    await createAccountWithCommittedUpload(owner);
+
+    const outsider = await loginAsNewUser(app);
+    const res = await outsider.get("/api/portfolio/currency-breakdown").expect(200);
+
+    expect(res.body.lines).toEqual([]);
+  });
+
+  it("rejects unauthenticated requests", async () => {
+    const app = createApp();
+    await request(app).get("/api/portfolio/currency-breakdown").expect(401);
+  });
+});
+
+describe("GET /api/portfolio/history", () => {
+  it("returns an empty history when nothing has been imported", async () => {
+    const app = createApp();
+    const agent = await loginAsNewUser(app);
+
+    const res = await agent.get("/api/portfolio/history").expect(200);
+
+    expect(res.body).toEqual({ userId: expect.any(String), points: [] });
+  });
+
+  it("does not include another user's accounts", async () => {
+    const app = createApp();
+    const owner = await loginAsNewUser(app);
+    await createAccountWithCommittedUpload(owner);
+
+    const outsider = await loginAsNewUser(app);
+    const res = await outsider.get("/api/portfolio/history").expect(200);
+
+    expect(res.body.points).toEqual([]);
+  });
+
+  it("rejects unauthenticated requests", async () => {
+    const app = createApp();
+    await request(app).get("/api/portfolio/history").expect(401);
+  });
+});
+
+describe("GET /api/portfolio/by-asset", () => {
+  it("returns an empty list when nothing has been imported, and needs no ?currency", async () => {
+    const app = createApp();
+    const agent = await loginAsNewUser(app);
+
+    const res = await agent.get("/api/portfolio/by-asset").expect(200);
+
+    expect(res.body).toEqual({ userId: expect.any(String), assets: [] });
+  });
+
+  it("does not include another user's accounts", async () => {
+    const app = createApp();
+    const owner = await loginAsNewUser(app);
+    await createAccountWithCommittedUpload(owner);
+
+    const outsider = await loginAsNewUser(app);
+    const res = await outsider.get("/api/portfolio/by-asset").expect(200);
+
+    expect(res.body.assets).toEqual([]);
+  });
+
+  it("rejects unauthenticated requests", async () => {
+    const app = createApp();
+    await request(app).get("/api/portfolio/by-asset").expect(401);
+  });
+});
