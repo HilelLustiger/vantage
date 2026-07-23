@@ -24,8 +24,8 @@ export function Layout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <aside className="flex w-64 flex-col border-r border-gray-200 bg-white px-4 py-6">
+    <div className="flex h-screen bg-gray-50">
+      <aside className="flex w-64 flex-col overflow-y-auto border-r border-gray-200 bg-white px-4 py-6">
         <div className="mb-8 px-2 text-lg font-semibold text-gray-900">Vantage</div>
         <nav className="flex flex-1 flex-col gap-1">
           {navItems.map(({ to, label, icon: Icon, end }) => (
@@ -56,7 +56,7 @@ export function Layout() {
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto p-8">
+      <main className="min-h-0 flex-1 overflow-y-auto p-8">
         <Outlet />
       </main>
     </div>
