@@ -45,3 +45,9 @@ export async function findAssetsByTicker(ticker: string) {
 export async function findAssetsByIsin(isin: string) {
   return (await db.select().from(assets).where(eq(assets.isin, isin))).map(toAsset);
 }
+
+export async function findAssetsBySecurityNumber(securityNumber: string) {
+  return (
+    await db.select().from(assets).where(eq(assets.securityNumber, securityNumber))
+  ).map(toAsset);
+}

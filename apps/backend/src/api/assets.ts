@@ -9,6 +9,7 @@ const createAssetSchema = z.object({
   name: z.string().min(1),
   ticker: z.string().min(1).optional(),
   isin: z.string().min(1).optional(),
+  securityNumber: z.string().min(1).optional(),
 });
 
 export const assetsRouter = Router();

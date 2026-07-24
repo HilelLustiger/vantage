@@ -58,10 +58,11 @@ describe("resolveAssets", () => {
     expect(result).toEqual({ resolvedAssetIds: [null], hasUnmatched: true });
   });
 
-  // Real shape from apps/parser/excellence.py — a securityNumber is present
-  // (a real, reliable identifier) but it's not a ticker or a verified ISIN,
-  // so it's deliberately not used for matching yet (see #20's rationale).
-  it("treats an Excellence-shaped holding (securityNumber only) as unmatched", async () => {
+  // Real shape from apps/parser/excellence.py. securityNumber matching was
+  // added in #35 — no matching Asset is registered here, so this stays
+  // unmatched (not because securityNumber goes unused, but because nothing
+  // in the registry has it yet).
+  it("treats an Excellence-shaped holding as unmatched when no asset shares its securityNumber", async () => {
     const result = await resolveAssets({
       institution: "אקסלנס",
       holdings: [
@@ -74,6 +75,44 @@ describe("resolveAssets", () => {
           currency: "ILS",
           percentOfPortfolio: "57.52",
         },
+      ],
+    });
+
+    expect(result).toEqual({ resolvedAssetIds: [null], hasUnmatched: true });
+  });
+
+  // #35 — the securityNumber matching key this Excellence-shaped holding
+  // needed to auto-match at all.
+  it("matches an Excellence-shaped holding by securityNumber", async () => {
+    const securityNumber = `SEC-${randomUUID()}`;
+    const asset = await createAsset({ type: "etf", name: "S&P 500", securityNumber });
+
+    const result = await resolveAssets({
+      institution: "אקסלנס",
+      holdings: [
+        {
+          assetName: "אינ.חוץ500",
+          securityNumber,
+          quantity: "2800.00",
+          currentPriceIls: 42.53,
+          value: "119084.00",
+          currency: "ILS",
+          percentOfPortfolio: "57.52",
+        },
+      ],
+    });
+
+    expect(result).toEqual({ resolvedAssetIds: [asset.id], hasUnmatched: false });
+  });
+
+  it("treats a duplicate-securityNumber registry state as unmatched", async () => {
+    const securityNumber = `SEC-${randomUUID()}`;
+    await createAsset({ type: "etf", name: "S&P 500", securityNumber });
+    await createAsset({ type: "etf", name: "S&P 500 Duplicate", securityNumber });
+
+    const result = await resolveAssets({
+      holdings: [
+        { assetName: "S&P 500", quantity: "1", value: "100", currency: "ILS", securityNumber },
       ],
     });
 

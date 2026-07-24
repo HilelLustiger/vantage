@@ -32,6 +32,7 @@ const resolutionSchema = z.union([
       name: z.string().min(1),
       ticker: z.string().min(1).optional(),
       isin: z.string().min(1).optional(),
+      securityNumber: z.string().min(1).optional(),
     }),
   }),
 ]);

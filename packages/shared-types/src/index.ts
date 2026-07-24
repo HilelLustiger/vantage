@@ -162,7 +162,13 @@ export type DocumentResolution =
   | { index: number; assetId: string }
   | {
       index: number;
-      newAsset: { type: AssetType; name: string; ticker?: string; isin?: string };
+      newAsset: {
+        type: AssetType;
+        name: string;
+        ticker?: string;
+        isin?: string;
+        securityNumber?: string;
+      };
     };
 
 // A dated cash-flow event for one Asset — see ADR 0023. Never an

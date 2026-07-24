@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAsset, findAssetsByIsin, findAssetsByTicker } from "./assets.js";
+import {
+  createAsset,
+  findAssetsByIsin,
+  findAssetsBySecurityNumber,
+  findAssetsByTicker,
+} from "./assets.js";
 
 describe("createAsset", () => {
   it("persists securityNumber when provided", async () => {
@@ -59,5 +64,32 @@ describe("findAssetsByIsin", () => {
 
   it("returns an empty array when nothing matches", async () => {
     await expect(findAssetsByIsin(`no-such-isin-${randomUUID()}`)).resolves.toEqual([]);
+  });
+});
+
+describe("findAssetsBySecurityNumber", () => {
+  it("finds a matching asset", async () => {
+    const securityNumber = `SEC-${randomUUID()}`;
+    const asset = await createAsset({ type: "etf", name: "S&P 500", securityNumber });
+
+    const matches = await findAssetsBySecurityNumber(securityNumber);
+
+    expect(matches.map((a) => a.id)).toEqual([asset.id]);
+  });
+
+  it("returns every match when more than one asset shares a securityNumber", async () => {
+    const securityNumber = `SEC-${randomUUID()}`;
+    const first = await createAsset({ type: "etf", name: "S&P 500", securityNumber });
+    const second = await createAsset({ type: "etf", name: "S&P 500 Duplicate", securityNumber });
+
+    const matches = await findAssetsBySecurityNumber(securityNumber);
+
+    expect(new Set(matches.map((a) => a.id))).toEqual(new Set([first.id, second.id]));
+  });
+
+  it("returns an empty array when nothing matches", async () => {
+    await expect(
+      findAssetsBySecurityNumber(`no-such-security-number-${randomUUID()}`),
+    ).resolves.toEqual([]);
   });
 });
