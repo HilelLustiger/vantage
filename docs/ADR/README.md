@@ -35,6 +35,8 @@ every implementation detail gets one.
 | [0020](0020-secrets-and-repo-visibility.md) | Git-ignored .env for secrets; private repo regardless of data sensitivity |
 | [0021](0021-automatic-institution-account-detection.md) | Automatic institution/account detection from statement content |
 | [0022](0022-multi-currency-display-native-vs-aggregate.md) | Multi-currency display — native currency per entity, converted only for aggregates |
+| [0023](0023-per-asset-cash-flow-tracking-and-return-metrics.md) | Per-Asset cash-flow tracking and return metrics |
+| [0024](0024-ingesting-per-transaction-statement-formats.md) | Ingesting per-transaction statement formats |
 
 ## Open Questions
 
