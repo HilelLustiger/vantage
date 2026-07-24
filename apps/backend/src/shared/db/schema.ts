@@ -8,9 +8,11 @@ import {
   boolean,
   numeric,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 import type {
   AssetType,
+  CashFlowSource,
   DocumentFeature,
   DocumentFormat,
   DocumentStatus,
@@ -74,6 +76,9 @@ export const assets = pgTable("assets", {
   name: text("name").notNull(),
   ticker: text("ticker"),
   isin: text("isin"),
+  // TASE (or equivalent exchange) security number — a real Asset-matching
+  // key alongside ticker/isin, see ADR-0024.
+  securityNumber: text("security_number"),
 });
 
 export const documents = pgTable("documents", {
@@ -147,6 +152,46 @@ export const holdings = pgTable("holdings", {
   value: numeric("value").notNull(),
   currency: text("currency").notNull(),
 });
+
+// See docs/ADR/0023-per-asset-cash-flow-tracking-and-return-metrics.md:
+// a dated cash-flow event for one Asset, aggregated cross-account at read
+// time (not partitioned by account) — accountId/documentId are kept here
+// purely for traceability and dedup, not as a query boundary. Append-only,
+// same immutability precedent as Snapshot (ADR-0009) — corrections append
+// new rows, nothing is ever rewritten. Dedup (composite natural key: date
+// + assetId + kind + amount + runningBalanceAfter) is enforced at the
+// application layer, not a DB constraint — runningBalanceAfter is
+// nullable, and SQL UNIQUE never treats NULLs as equal, so a DB
+// constraint would silently miss duplicates for exactly the rows most
+// likely to lack it (derived_period_aggregate/derived_cost_basis_delta).
+export const cashFlows = pgTable(
+  "cash_flows",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    assetId: text("asset_id")
+      .notNull()
+      .references(() => assets.id),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id),
+    date: date("date", { mode: "string" }).notNull(),
+    // Signed: positive = contributed/bought, negative = withdrawn/sold —
+    // flipped to finance convention only at XIRR computation time.
+    amount: numeric("amount").notNull(),
+    currency: text("currency").notNull(),
+    kind: text("kind").notNull(),
+    source: text("source").notNull().$type<CashFlowSource>(),
+    runningBalanceAfter: numeric("running_balance_after"),
+  },
+  (t) => ({
+    assetDateIdx: index("cash_flows_asset_date_idx").on(t.assetId, t.date),
+  }),
+);
 
 // See docs/ADR/0012-multi-currency-store-original-convert-at-read.md: a
 // local cache of fetched Frankfurter rates, keyed by the *requested* date

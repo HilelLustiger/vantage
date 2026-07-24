@@ -2,6 +2,26 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createAsset, findAssetsByIsin, findAssetsByTicker } from "./assets.js";
 
+describe("createAsset", () => {
+  it("persists securityNumber when provided", async () => {
+    const securityNumber = `SEC-${randomUUID()}`;
+
+    const asset = await createAsset({
+      type: "stock",
+      name: "Example Corp",
+      securityNumber,
+    });
+
+    expect(asset.securityNumber).toBe(securityNumber);
+  });
+
+  it("leaves securityNumber undefined when omitted, not null", async () => {
+    const asset = await createAsset({ type: "stock", name: "Example Corp" });
+
+    expect(asset.securityNumber).toBeUndefined();
+  });
+});
+
 describe("findAssetsByTicker", () => {
   it("finds a matching asset", async () => {
     const ticker = `TICK-${randomUUID()}`;

@@ -3,14 +3,15 @@ import type { Asset, AssetType } from "@vantage/shared-types";
 import { db } from "./client.js";
 import { assets } from "./schema.js";
 
-// Postgres represents an absent ticker/isin as NULL; Asset models it as
-// undefined (optional field) — normalize at the boundary so the DB's
-// representation doesn't leak into the domain type.
+// Postgres represents an absent ticker/isin/securityNumber as NULL; Asset
+// models it as undefined (optional field) — normalize at the boundary so
+// the DB's representation doesn't leak into the domain type.
 function toAsset(row: typeof assets.$inferSelect): Asset {
   return {
     ...row,
     ticker: row.ticker ?? undefined,
     isin: row.isin ?? undefined,
+    securityNumber: row.securityNumber ?? undefined,
   };
 }
 
@@ -19,6 +20,7 @@ export async function createAsset(input: {
   name: string;
   ticker?: string;
   isin?: string;
+  securityNumber?: string;
 }) {
   const [asset] = await db.insert(assets).values(input).returning();
   return toAsset(asset);

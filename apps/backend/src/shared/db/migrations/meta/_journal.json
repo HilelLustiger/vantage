@@ -57,6 +57,13 @@
       "when": 1784759528652,
       "tag": "0007_sparkling_bloodaxe",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784883781465,
+      "tag": "0008_silky_mentallo",
+      "breakpoints": true
     }
   ]
 }
