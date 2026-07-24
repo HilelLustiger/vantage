@@ -49,12 +49,12 @@ not-yet-designed bank-activity feature and is not reused here.
   large manual-review batch on first import.
 - **New "flows-only" commit path**: a Document whose parsed data has
   transactions but no holdings/balance section (Hapoalim) commits
-  directly to `holding_flows` rows with **zero Snapshots created** — a
+  directly to `cash_flows` rows with **zero Snapshots created** — a
   new, real terminal outcome. Inventing a synthetic carried-forward
   Snapshot to preserve "every committed Document has exactly one
   Snapshot" was considered and rejected (see below). A Document with
   *both* sections (Excellence, when activity occurred) commits to
-  Snapshot+Holdings **and** `holding_flows` in the same transaction.
+  Snapshot+Holdings **and** `cash_flows` in the same transaction.
 - Dedup (ADR-0023's composite natural key) happens at this commit step.
 
 ## Alternatives Considered

@@ -22,7 +22,7 @@ feature, explicitly not what this covers (confirmed with the household:
 
 ## Decision
 
-**A new `holding_flows` table** — one append-only row per dated cash-flow
+**A new `cash_flows` table** — one append-only row per dated cash-flow
 event, scoped **per-Asset** (not per-Account, not portfolio-wide — matches
 how cost basis is already reported per-security, and gives each holding
 in a multi-asset Account its own meaningful metrics). Shape: account,
@@ -40,7 +40,7 @@ Confirmed via Gemel's own reconciliation identity (`starting + deposits +
 transfers + gain_loss + fees + withdrawals + transfers_out = ending`)
 that `gain_loss` and `fees` are already netted into the balance
 progression — they are performance, not cash flow, and must never be
-recorded as `holding_flows` rows.
+recorded as `cash_flows` rows.
 
 **Dating**: every derived flow (from a period aggregate, e.g. Gemel) is
 dated at that statement's own `asOfDate` — the one date every institution
@@ -52,7 +52,7 @@ carry an exact date already.
 
 **Cost basis precedence**: prefer an institution's own directly-stated
 figure (Excellence's `purchaseCostIls`) when available; fall back to the
-running sum of `holding_flows` only when the institution doesn't provide
+running sum of `cash_flows` only when the institution doesn't provide
 one directly. The institution's number is authoritative and immune to
 "our ingested history doesn't go back far enough" — our derived sum is an
 approximation that only improves as more historical periods get
@@ -66,7 +66,7 @@ sample), so re-importing an overlapping transaction-log export (expected
 — Hapoalim's own export is a rolling 2-year window) must skip rows
 already recorded rather than double-count them.
 
-**Metrics** (computed from `holding_flows` + the Asset's current value,
+**Metrics** (computed from `cash_flows` + the Asset's current value,
 all in that Asset's own native currency — no FX conversion needed, since
 cost basis and value are already denominated the same way, consistent
 with ADR-0022's native-currency-per-entity principle):
@@ -110,9 +110,9 @@ is actively misleading for very recently opened positions.
 
 ## Consequences
 
-- New `holding_flows` table + migration; new shared-types.
+- New `cash_flows` table + migration; new shared-types.
 - Existing Gemel/Excellence commit paths must additionally derive and
-  insert `holding_flows` rows, not just Snapshot+Holdings.
+  insert `cash_flows` rows, not just Snapshot+Holdings.
 - XIRR needs a real numerical root-finder (e.g. Newton's method) — new,
   non-trivial computational code, worth its own careful test suite
   (known-answer cases, not just "doesn't crash").
