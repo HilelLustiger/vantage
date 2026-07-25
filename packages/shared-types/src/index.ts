@@ -40,6 +40,9 @@ export interface Holding {
   /** Value in `currency`, never converted — see ADR 0012. */
   value: string;
   currency: string;
+  /** Only ever set when the source institution states one directly
+   * (Excellence) — see ADR 0023/#39. */
+  purchaseCostIls?: string;
 }
 
 export interface Snapshot {

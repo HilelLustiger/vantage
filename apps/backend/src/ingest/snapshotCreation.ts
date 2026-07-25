@@ -5,8 +5,11 @@
 // shapes — holdings-only, transactions-only/flows-only, or both).
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import type { CashFlowSource } from "@vantage/shared-types";
 import { db } from "../shared/db/client.js";
+import { listHoldingsForSnapshot } from "../shared/db/holdings.js";
 import { cashFlows, documents, holdings, snapshots } from "../shared/db/schema.js";
+import { findPreviousActiveSnapshot } from "../shared/db/snapshots.js";
 import { deriveFlowAmount, selectFlowTransactions } from "./cashFlowTransactions.js";
 
 const parsedDataSchema = z
@@ -23,6 +26,11 @@ const parsedDataSchema = z
             quantity: z.string(),
             value: z.string(),
             currency: z.string(),
+            // Excellence emits this as a raw JSON number (unlike the
+            // string-typed quantity/value) — kept as the parser's own
+            // native type rather than forcing an inconsistent cast.
+            // ADR-0023/#39.
+            purchaseCostIls: z.number().optional(),
           })
           .passthrough(),
       )
@@ -42,6 +50,13 @@ const parsedDataSchema = z
           .passthrough(),
       )
       .optional(),
+    // Gemel period-aggregate figures (#39) — deposits stays nullish (no
+    // such line on some statements); transfers/withdrawals/transfersOut
+    // already default to "0.0" at the parser layer, a real explicit zero.
+    deposits: z.string().nullish(),
+    transfers: z.string().nullish(),
+    withdrawals: z.string().nullish(),
+    transfersOut: z.string().nullish(),
   })
   .passthrough();
 
@@ -98,6 +113,39 @@ export async function commitSnapshot(
   const flowAssetIds = resolvedAssetIds.slice(parsed.data.holdings?.length ?? 0);
 
   await db.transaction(async (tx) => {
+    // Shared by #38's real-transaction rows and #39's two derivations
+    // below — the same dedup check (assetId, date, kind, amount,
+    // runningBalanceAfter — ADR-0023) applies to all three sources.
+    async function insertCashFlowIfNew(input: {
+      assetId: string;
+      date: string;
+      amount: string;
+      currency: string;
+      kind: string;
+      source: CashFlowSource;
+      runningBalanceAfter?: string;
+    }) {
+      const existingMatches = await tx
+        .select()
+        .from(cashFlows)
+        .where(and(eq(cashFlows.assetId, input.assetId), eq(cashFlows.date, input.date)));
+      const isDuplicate = existingMatches.some(
+        (row) =>
+          row.kind === input.kind &&
+          row.amount === input.amount &&
+          (row.runningBalanceAfter ?? undefined) === input.runningBalanceAfter,
+      );
+      if (isDuplicate) {
+        return;
+      }
+
+      await tx.insert(cashFlows).values({
+        accountId,
+        documentId,
+        ...input,
+      });
+    }
+
     if (parsed.data.holdings !== undefined && asOfDate !== null) {
       const [existingActive] = await tx
         .select()
@@ -131,8 +179,71 @@ export async function commitSnapshot(
             quantity: holding.quantity,
             value: holding.value,
             currency: holding.currency,
+            purchaseCostIls:
+              holding.purchaseCostIls !== undefined ? String(holding.purchaseCostIls) : undefined,
           })),
         );
+      }
+
+      // Gemel period-aggregate derivation (ADR-0023/#39) — always exactly
+      // 0 or 1 holding for this shape; ambiguous for anything else, so
+      // skipped defensively rather than guessing which holding it's for.
+      if (parsed.data.holdings.length === 1) {
+        const assetId = holdingIds[0]!;
+        const currency = parsed.data.holdings[0].currency;
+        const periodFlows: { kind: string; amount: string | null | undefined }[] = [
+          { kind: "deposit", amount: parsed.data.deposits },
+          { kind: "transfer_in", amount: parsed.data.transfers },
+          { kind: "withdrawal", amount: parsed.data.withdrawals },
+          { kind: "transfer_out", amount: parsed.data.transfersOut },
+        ];
+        for (const flow of periodFlows) {
+          if (!flow.amount || Number(flow.amount) === 0) {
+            continue;
+          }
+          await insertCashFlowIfNew({
+            assetId,
+            date: asOfDate,
+            amount: flow.amount,
+            currency,
+            kind: flow.kind,
+            source: "derived_period_aggregate",
+          });
+        }
+      }
+
+      // Excellence cost-basis-delta derivation (ADR-0023/#39) — only the
+      // fallback for periods with no real per-transaction data; #38 already
+      // recorded real ingested_transaction flows when transactions exist,
+      // and deriving this too would double-count the same activity.
+      if (parsed.data.transactions === undefined || parsed.data.transactions.length === 0) {
+        for (const [i, holding] of parsed.data.holdings.entries()) {
+          if (holding.purchaseCostIls === undefined) {
+            continue;
+          }
+          const assetId = holdingIds[i]!;
+          const previousSnapshot = await findPreviousActiveSnapshot(accountId, asOfDate);
+          if (!previousSnapshot) {
+            continue;
+          }
+          const previousHoldings = await listHoldingsForSnapshot(previousSnapshot.id);
+          const previousHolding = previousHoldings.find((h) => h.assetId === assetId);
+          if (previousHolding?.purchaseCostIls === undefined) {
+            continue;
+          }
+          const delta = holding.purchaseCostIls - Number(previousHolding.purchaseCostIls);
+          if (delta === 0) {
+            continue;
+          }
+          await insertCashFlowIfNew({
+            assetId,
+            date: asOfDate,
+            amount: String(delta),
+            currency: holding.currency,
+            kind: "cost_basis_delta",
+            source: "derived_cost_basis_delta",
+          });
+        }
       }
     }
 
@@ -148,24 +259,8 @@ export async function commitSnapshot(
       // Non-null by the caller's contract, same as holdingIds above.
       const assetId = flowAssetIds[i]!;
 
-      const existingMatches = await tx
-        .select()
-        .from(cashFlows)
-        .where(and(eq(cashFlows.assetId, assetId), eq(cashFlows.date, date)));
-      const isDuplicate = existingMatches.some(
-        (row) =>
-          row.kind === transaction.kind &&
-          row.amount === amount &&
-          (row.runningBalanceAfter ?? undefined) === runningBalanceAfter,
-      );
-      if (isDuplicate) {
-        continue;
-      }
-
-      await tx.insert(cashFlows).values({
-        accountId,
+      await insertCashFlowIfNew({
         assetId,
-        documentId,
         date,
         amount,
         currency: transaction.currency,

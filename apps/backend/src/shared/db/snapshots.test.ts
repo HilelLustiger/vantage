@@ -8,6 +8,7 @@ import { snapshots } from "./schema.js";
 import {
   findActiveSnapshot,
   findLatestActiveSnapshotsForUser,
+  findPreviousActiveSnapshot,
   findSnapshotById,
   findSnapshotVisibleToUser,
   listSnapshotsForUser,
@@ -82,6 +83,53 @@ describe("findActiveSnapshot", () => {
     });
 
     await expect(findActiveSnapshot(account.id, "2026-03-31")).resolves.toBeUndefined();
+  });
+});
+
+describe("findPreviousActiveSnapshot", () => {
+  it("returns the closest earlier active snapshot", async () => {
+    const account = await createTestAccount();
+    const olderDoc = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    const closerDoc = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await createSnapshotRow(account.id, olderDoc.id, { asOfDate: "2025-06-30" });
+    const closer = await createSnapshotRow(account.id, closerDoc.id, { asOfDate: "2025-12-31" });
+
+    const found = await findPreviousActiveSnapshot(account.id, "2026-03-31");
+
+    expect(found?.id).toBe(closer.id);
+  });
+
+  it("ignores snapshots on or after the given date", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await createSnapshotRow(account.id, document.id, { asOfDate: "2026-03-31" });
+
+    await expect(
+      findPreviousActiveSnapshot(account.id, "2026-03-31"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("prefers a later date's active snapshot over an earlier date's superseded one", async () => {
+    const account = await createTestAccount();
+    const supersededDoc = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    const activeDoc = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await createSnapshotRow(account.id, supersededDoc.id, {
+      asOfDate: "2025-06-30",
+      isActive: false,
+    });
+    const active = await createSnapshotRow(account.id, activeDoc.id, { asOfDate: "2025-12-31" });
+
+    const found = await findPreviousActiveSnapshot(account.id, "2026-03-31");
+
+    expect(found?.id).toBe(active.id);
+  });
+
+  it("returns undefined when there is no earlier snapshot at all", async () => {
+    const account = await createTestAccount();
+
+    await expect(
+      findPreviousActiveSnapshot(account.id, "2026-03-31"),
+    ).resolves.toBeUndefined();
   });
 });
 

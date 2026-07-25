@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import type { Snapshot } from "@vantage/shared-types";
 import { db } from "./client.js";
 import { accountUsers, snapshots } from "./schema.js";
@@ -21,6 +21,26 @@ export async function findActiveSnapshot(accountId: string, asOfDate: string) {
         eq(snapshots.isActive, true),
       ),
     );
+  return row && toSnapshot(row);
+}
+
+// The closest earlier active Snapshot for this Account — see ADR-0023/#39:
+// walks the per-date active lineage (a superseded Snapshot only ever
+// replaces a same-date correction, ADR-0009, never a different date), used
+// to diff Excellence's purchaseCostIls against the previous period.
+export async function findPreviousActiveSnapshot(accountId: string, beforeDate: string) {
+  const [row] = await db
+    .select()
+    .from(snapshots)
+    .where(
+      and(
+        eq(snapshots.accountId, accountId),
+        lt(snapshots.asOfDate, beforeDate),
+        eq(snapshots.isActive, true),
+      ),
+    )
+    .orderBy(desc(snapshots.asOfDate))
+    .limit(1);
   return row && toSnapshot(row);
 }
 

@@ -4,7 +4,7 @@ import { db } from "./client.js";
 import { holdings } from "./schema.js";
 
 function toHolding(row: typeof holdings.$inferSelect): Holding {
-  return { ...row };
+  return { ...row, purchaseCostIls: row.purchaseCostIls ?? undefined };
 }
 
 export async function listHoldingsForSnapshot(snapshotId: string) {

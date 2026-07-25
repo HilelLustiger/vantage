@@ -40,6 +40,11 @@ def test_yearly_happy_path_reconciles() -> None:
     ]
     assert result["checks"]["reconciles"] is True
     assert result["checks"]["reconciliationDelta"] == 0.0
+    # #39 — surfaced for cash_flows derivation, not just the checks block.
+    assert result["deposits"] == "10000.0"
+    assert result["transfers"] == "0.0"  # no transfer-in line on this statement
+    assert result["withdrawals"] == "0.0"
+    assert result["transfersOut"] == "0.0"
 
 
 def test_quarterly_loss_with_l_dash_balance_and_trailing_minus_return() -> None:
@@ -91,6 +96,8 @@ def test_transfer_in_is_included_in_reconciliation() -> None:
 
     assert result["checks"]["reconciles"] is True
     assert result["checks"]["reconciliationDelta"] == 0.0
+    assert result["deposits"] == "5000.0"
+    assert result["transfers"] == "20000.0"  # the transfer-in this test exists to cover
 
 
 def test_malformed_percent_before_number_track_format() -> None:
@@ -125,3 +132,4 @@ def test_missing_reconciliation_fields_omits_checks() -> None:
 
     assert result["checks"] is None
     assert result["holdings"][0]["value"] == "10000"
+    assert result["deposits"] is None  # no deposits line on this statement at all

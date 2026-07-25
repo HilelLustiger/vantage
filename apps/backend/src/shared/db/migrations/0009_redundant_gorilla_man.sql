@@ -1,0 +1,1 @@
+ALTER TABLE "holdings" ADD COLUMN "purchase_cost_ils" numeric;

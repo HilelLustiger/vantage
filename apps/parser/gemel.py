@@ -132,4 +132,13 @@ def extract_gemel_statement(text: str, institution: str) -> dict[str, Any]:
         if balance_match
         else [],
         "checks": checks,
+        # ADR-0023/#39: the same figures used for the reconciliation check
+        # above, now surfaced for the ingest pipeline to derive cash_flows
+        # rows from. gain_loss/fees are deliberately NOT included here —
+        # they're performance already netted into the balance progression,
+        # never a cash flow (see the reconciliation identity above).
+        "deposits": str(deposits) if deposits is not None else None,
+        "transfers": str(transfers),
+        "withdrawals": str(withdrawals),
+        "transfersOut": str(transfers_out),
     }

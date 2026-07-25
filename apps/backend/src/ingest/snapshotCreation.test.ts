@@ -323,4 +323,211 @@ describe("commitSnapshot", () => {
 
     await expect(findCashFlowsForAsset(asset.id)).resolves.toHaveLength(2);
   });
+
+  // ADR-0023/#39 — Gemel period-aggregate derivation.
+  it("derives correctly-signed/kinded cash_flows from a Gemel-shaped commit's period-aggregate fields", async () => {
+    const account = await createTestAccount();
+    const document = await createProcessingDocument(account.id);
+    const asset = await createAsset({ type: "mutual_fund", name: "Pension Fund" });
+
+    const result = await commitSnapshot(
+      document.id,
+      account.id,
+      {
+        asOfDate: "31.12.2025",
+        holdings: [{ assetName: "Pension Fund", quantity: "1", value: "50000", currency: "ILS" }],
+        deposits: "10000.0",
+        transfers: "20000.0",
+        withdrawals: "-500.0",
+        transfersOut: "-300.0",
+      },
+      [asset.id],
+    );
+
+    expect(result).toEqual({ ok: true });
+    const flows = await findCashFlowsForAsset(asset.id);
+    expect(flows).toHaveLength(4);
+    expect(flows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "deposit", amount: "10000.0", date: "2025-12-31" }),
+        expect.objectContaining({ kind: "transfer_in", amount: "20000.0" }),
+        expect.objectContaining({ kind: "withdrawal", amount: "-500.0" }),
+        expect.objectContaining({ kind: "transfer_out", amount: "-300.0" }),
+      ]),
+    );
+    expect(flows.every((f) => f.source === "derived_period_aggregate")).toBe(true);
+  });
+
+  it("skips zero-valued and absent Gemel period-aggregate fields", async () => {
+    const account = await createTestAccount();
+    const document = await createProcessingDocument(account.id);
+    const asset = await createAsset({ type: "mutual_fund", name: "Pension Fund" });
+
+    await commitSnapshot(
+      document.id,
+      account.id,
+      {
+        asOfDate: "31.12.2025",
+        holdings: [{ assetName: "Pension Fund", quantity: "1", value: "10000", currency: "ILS" }],
+        deposits: null,
+        transfers: "0.0",
+        withdrawals: "0.0",
+        transfersOut: "0.0",
+      },
+      [asset.id],
+    );
+
+    await expect(findCashFlowsForAsset(asset.id)).resolves.toEqual([]);
+  });
+
+  it("skips Gemel derivation when there isn't exactly one holding", async () => {
+    const account = await createTestAccount();
+    const document = await createProcessingDocument(account.id);
+
+    await commitSnapshot(
+      document.id,
+      account.id,
+      { asOfDate: "31.12.2025", holdings: [], deposits: "10000.0" },
+      [],
+    );
+
+    await expect(findDocumentById(document.id)).resolves.toEqual(
+      expect.objectContaining({ status: "committed" }),
+    );
+  });
+
+  // ADR-0023/#39 — Excellence cost-basis-delta derivation.
+  it("derives nothing from a first Excellence Snapshot for a holding (no prior to diff)", async () => {
+    const account = await createTestAccount();
+    const document = await createProcessingDocument(account.id);
+    const asset = await createAsset({ type: "etf", name: "S&P 500" });
+
+    await commitSnapshot(
+      document.id,
+      account.id,
+      {
+        asOfDate: "30.09.2024",
+        holdings: [
+          {
+            assetName: "S&P 500",
+            quantity: "4.00",
+            value: "16720.00",
+            currency: "ILS",
+            purchaseCostIls: 16359.52,
+          },
+        ],
+      },
+      [asset.id],
+    );
+
+    await expect(findCashFlowsForAsset(asset.id)).resolves.toEqual([]);
+  });
+
+  it("derives a correctly-signed cost_basis_delta from a second Excellence Snapshot", async () => {
+    const account = await createTestAccount();
+    const asset = await createAsset({ type: "etf", name: "S&P 500" });
+
+    const firstDocument = await createProcessingDocument(account.id);
+    await commitSnapshot(
+      firstDocument.id,
+      account.id,
+      {
+        asOfDate: "30.06.2024",
+        holdings: [
+          { assetName: "S&P 500", quantity: "3.00", value: "12000.00", currency: "ILS", purchaseCostIls: 12000 },
+        ],
+      },
+      [asset.id],
+    );
+
+    const secondDocument = await createProcessingDocument(account.id);
+    const result = await commitSnapshot(
+      secondDocument.id,
+      account.id,
+      {
+        asOfDate: "30.09.2024",
+        holdings: [
+          { assetName: "S&P 500", quantity: "4.00", value: "16720.00", currency: "ILS", purchaseCostIls: 16359.52 },
+        ],
+      },
+      [asset.id],
+    );
+
+    expect(result).toEqual({ ok: true });
+    const flows = await findCashFlowsForAsset(asset.id);
+    expect(flows).toEqual([
+      expect.objectContaining({
+        kind: "cost_basis_delta",
+        amount: "4359.52",
+        date: "2024-09-30",
+        source: "derived_cost_basis_delta",
+      }),
+    ]);
+  });
+
+  it("does not derive a cost_basis_delta when the document also has real transactions (double-count guard)", async () => {
+    const account = await createTestAccount();
+    const asset = await createAsset({ type: "etf", name: "S&P 500" });
+
+    const firstDocument = await createProcessingDocument(account.id);
+    await commitSnapshot(
+      firstDocument.id,
+      account.id,
+      {
+        asOfDate: "30.06.2024",
+        holdings: [
+          { assetName: "S&P 500", quantity: "3.00", value: "12000.00", currency: "ILS", purchaseCostIls: 12000 },
+        ],
+      },
+      [asset.id],
+    );
+
+    const secondDocument = await createProcessingDocument(account.id);
+    await commitSnapshot(
+      secondDocument.id,
+      account.id,
+      {
+        asOfDate: "30.09.2024",
+        holdings: [
+          { assetName: "S&P 500", quantity: "4.00", value: "16720.00", currency: "ILS", purchaseCostIls: 16359.52 },
+        ],
+        transactions: [
+          { date: "30/09/2024", assetName: "S&P 500", kind: "buy", amount: "4180.0", currency: "ILS" },
+        ],
+      },
+      [asset.id, asset.id],
+    );
+
+    const flows = await findCashFlowsForAsset(asset.id);
+    expect(flows).toHaveLength(1);
+    expect(flows[0]).toEqual(expect.objectContaining({ kind: "buy", source: "ingested_transaction" }));
+  });
+
+  it("dedups re-importing the same Excellence Snapshot (no duplicate cost_basis_delta)", async () => {
+    const account = await createTestAccount();
+    const asset = await createAsset({ type: "etf", name: "S&P 500" });
+    const firstData = {
+      asOfDate: "30.06.2024",
+      holdings: [
+        { assetName: "S&P 500", quantity: "3.00", value: "12000.00", currency: "ILS", purchaseCostIls: 12000 },
+      ],
+    };
+    const secondData = {
+      asOfDate: "30.09.2024",
+      holdings: [
+        { assetName: "S&P 500", quantity: "4.00", value: "16720.00", currency: "ILS", purchaseCostIls: 16359.52 },
+      ],
+    };
+
+    const firstDocument = await createProcessingDocument(account.id);
+    await commitSnapshot(firstDocument.id, account.id, firstData, [asset.id]);
+    const secondDocument = await createProcessingDocument(account.id);
+    await commitSnapshot(secondDocument.id, account.id, secondData, [asset.id]);
+
+    const thirdDocument = await createProcessingDocument(account.id);
+    const result = await commitSnapshot(thirdDocument.id, account.id, secondData, [asset.id]);
+
+    expect(result).toEqual({ ok: true });
+    await expect(findCashFlowsForAsset(asset.id)).resolves.toHaveLength(1);
+  });
 });

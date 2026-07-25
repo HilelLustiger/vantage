@@ -152,6 +152,11 @@ export const holdings = pgTable("holdings", {
   quantity: numeric("quantity").notNull(),
   value: numeric("value").notNull(),
   currency: text("currency").notNull(),
+  // Only ever populated when the parser provides one directly (Excellence
+  // today) — see ADR-0023/#39: diffing this against the previous Snapshot's
+  // Holding for the same Asset is how a cost-basis-delta cash_flow gets
+  // derived when there's no real per-transaction data for the period.
+  purchaseCostIls: numeric("purchase_cost_ils"),
 });
 
 // See docs/ADR/0023-per-asset-cash-flow-tracking-and-return-metrics.md:
