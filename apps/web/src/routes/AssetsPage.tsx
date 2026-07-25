@@ -1,11 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Plus } from "lucide-react";
-import type { Asset, AssetHoldingBreakdown, AssetType } from "@vantage/shared-types";
+import { ChevronDown, ChevronUp, Plus } from "lucide-react";
+import type { Asset, AssetCurrencyValue, AssetHoldingBreakdown, AssetType } from "@vantage/shared-types";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Modal } from "../components/Modal";
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell } from "../components/Table";
 import { assetsApi } from "../lib/api/assets";
 import { portfolioApi } from "../lib/api/portfolio";
 
@@ -15,11 +14,24 @@ function formatMoney(value: number, currency: string) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value);
 }
 
+function formatPct(value: number) {
+  return `${value.toFixed(1)}%`;
+}
+
+// gain green / loss red / flat gray — the whole point of the expanded
+// view is "did this asset do well."
+function signColor(value: number) {
+  if (value > 0) return "text-emerald-700";
+  if (value < 0) return "text-red-600";
+  return "text-gray-500";
+}
+
 export function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [holdings, setHoldings] = useState<AssetHoldingBreakdown[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [expandedAssetIds, setExpandedAssetIds] = useState<Set<string>>(new Set());
 
   async function refresh() {
     const [assetList, byAsset] = await Promise.all([assetsApi.list(), portfolioApi.byAsset()]);
@@ -30,6 +42,18 @@ export function AssetsPage() {
   useEffect(() => {
     refresh().finally(() => setIsLoading(false));
   }, []);
+
+  function toggleExpanded(assetId: string) {
+    setExpandedAssetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(assetId)) {
+        next.delete(assetId);
+      } else {
+        next.add(assetId);
+      }
+      return next;
+    });
+  }
 
   const holdingsByAssetId = new Map(holdings.map((h) => [h.assetId, h]));
 
@@ -55,46 +79,20 @@ export function AssetsPage() {
         </Button>
       </div>
 
-      <Card className="p-0">
-        <Table>
-          <TableHead>
-            <tr>
-              <TableHeaderCell>Name</TableHeaderCell>
-              <TableHeaderCell>Type</TableHeaderCell>
-              <TableHeaderCell>Ticker</TableHeaderCell>
-              <TableHeaderCell>ISIN</TableHeaderCell>
-              <TableHeaderCell>Quantity</TableHeaderCell>
-              <TableHeaderCell>Value</TableHeaderCell>
-            </tr>
-          </TableHead>
-          <TableBody>
-            {sortedAssets.map((asset) => {
-              const holding = holdingsByAssetId.get(asset.id);
-              return (
-                <tr key={asset.id}>
-                  <TableCell className="font-medium text-gray-900">{asset.name}</TableCell>
-                  <TableCell>
-                    <Badge>{asset.type}</Badge>
-                  </TableCell>
-                  <TableCell>{asset.ticker ?? "—"}</TableCell>
-                  <TableCell>{asset.isin ?? "—"}</TableCell>
-                  <TableCell>{holding?.quantity ?? "—"}</TableCell>
-                  <TableCell>
-                    {holding && holding.valuesByCurrency.length > 0
-                      ? holding.valuesByCurrency
-                          .map((v) => formatMoney(Number(v.value), v.currency))
-                          .join(" · ")
-                      : "—"}
-                  </TableCell>
-                </tr>
-              );
-            })}
-          </TableBody>
-        </Table>
+      <div className="space-y-4">
+        {sortedAssets.map((asset) => (
+          <AssetCard
+            key={asset.id}
+            asset={asset}
+            holding={holdingsByAssetId.get(asset.id)}
+            isExpanded={expandedAssetIds.has(asset.id)}
+            onToggle={() => toggleExpanded(asset.id)}
+          />
+        ))}
         {!isLoading && assets.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-gray-500">No assets yet.</p>
+          <Card className="text-center text-sm text-gray-500">No assets yet.</Card>
         )}
-      </Card>
+      </div>
 
       {isModalOpen && (
         <AddAssetModal
@@ -105,6 +103,120 @@ export function AssetsPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function AssetCard({
+  asset,
+  holding,
+  isExpanded,
+  onToggle,
+}: {
+  asset: Asset;
+  holding: AssetHoldingBreakdown | undefined;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const isHeld = holding !== undefined && holding.valuesByCurrency.length > 0;
+
+  return (
+    <Card className="p-0">
+      <button
+        type="button"
+        onClick={isHeld ? onToggle : undefined}
+        disabled={!isHeld}
+        className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left disabled:cursor-default"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="min-w-0">
+            <p className="truncate font-medium text-gray-900">
+              {asset.name}
+              {asset.ticker && <span className="ml-1 text-gray-500">({asset.ticker})</span>}
+            </p>
+          </div>
+          <Badge>{asset.type}</Badge>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-4">
+          <span className="text-sm text-gray-500">{holding?.quantity ?? "—"}</span>
+          <span className="text-sm font-medium text-gray-900">
+            {isHeld
+              ? holding.valuesByCurrency.map((v) => formatMoney(Number(v.value), v.currency)).join(" · ")
+              : "—"}
+          </span>
+          {isHeld && (isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
+        </div>
+      </button>
+
+      {isExpanded && isHeld && (
+        <div className="space-y-4 border-t border-gray-100 px-6 py-4">
+          {holding.valuesByCurrency.map((v) => (
+            <CurrencyMetricsBlock
+              key={v.currency}
+              value={v}
+              // Only label the block when there's more than one currency
+              // to disambiguate — same "no clutter for the common case"
+              // treatment as the collapsed chips above.
+              showCurrencyLabel={holding.valuesByCurrency.length > 1}
+            />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function CurrencyMetricsBlock({
+  value,
+  showCurrencyLabel,
+}: {
+  value: AssetCurrencyValue;
+  showCurrencyLabel: boolean;
+}) {
+  const profit = Number(value.profit);
+  const simpleReturnPct = value.simpleReturnPct;
+
+  return (
+    <div>
+      {showCurrencyLabel && (
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          {value.currency}
+        </p>
+      )}
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+        <MetricRow label="Cost basis" value={formatMoney(Number(value.costBasis), value.currency)} />
+        <MetricRow
+          label="Profit"
+          value={formatMoney(profit, value.currency)}
+          className={signColor(profit)}
+        />
+        <MetricRow
+          label="Return %"
+          value={simpleReturnPct === null ? "—" : formatPct(simpleReturnPct)}
+          className={simpleReturnPct === null ? undefined : signColor(simpleReturnPct)}
+        />
+        <MetricRow
+          label="Tax on profit"
+          value={formatMoney(Number(value.taxOnProfit), value.currency)}
+        />
+        <MetricRow label="Net of tax" value={formatMoney(Number(value.netOfTax), value.currency)} />
+        {/* De-emphasized/hidden below the minimum holding period (#42) —
+            the backend already collapses "too new" and "uncomputable"
+            into the same null, so there's nothing more specific to show. */}
+        {value.xirr !== null && (
+          <MetricRow label="XIRR" value={formatPct(value.xirr * 100)} className={signColor(value.xirr)} />
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function MetricRow({ label, value, className }: { label: string; value: string; className?: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-gray-500">{label}</dt>
+      <dd className={`font-medium ${className ?? "text-gray-900"}`}>{value}</dd>
     </div>
   );
 }

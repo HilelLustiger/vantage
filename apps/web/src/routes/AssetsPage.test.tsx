@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AssetCurrencyValue } from "@vantage/shared-types";
 import { AssetsPage } from "./AssetsPage";
 
 const asset = { id: "asset-1", type: "stock", name: "Example Corp", ticker: "EX" };
@@ -13,6 +14,23 @@ interface TestAsset {
   ticker?: string;
 }
 
+// Full AssetCurrencyValue shape (#43) with sane defaults — individual
+// tests only override the fields they care about.
+function currencyValue(overrides: Partial<AssetCurrencyValue> = {}): AssetCurrencyValue {
+  return {
+    currency: "ILS",
+    value: "1000",
+    costBasis: "800",
+    costBasisSource: "institution_stated",
+    profit: "200",
+    simpleReturnPct: 25,
+    xirr: 0.1,
+    taxOnProfit: "50",
+    netOfTax: "950",
+    ...overrides,
+  };
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 300, status, json: async () => body };
 }
@@ -22,7 +40,7 @@ function mockApi({
   byAsset = [],
 }: {
   assets?: TestAsset[];
-  byAsset?: { assetId: string; quantity: string; valuesByCurrency: { currency: string; value: string }[] }[];
+  byAsset?: { assetId: string; quantity: string; valuesByCurrency: AssetCurrencyValue[] }[];
 } = {}) {
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
@@ -51,7 +69,7 @@ describe("AssetsPage", () => {
     render(<AssetsPage />);
 
     await waitFor(() => expect(screen.getByText("Example Corp")).toBeDefined());
-    expect(screen.getByText("EX")).toBeDefined();
+    expect(screen.getByText("(EX)")).toBeDefined();
   });
 
   it("shows an empty state when there are no assets", async () => {
@@ -86,8 +104,8 @@ describe("AssetsPage", () => {
           assetId: "asset-1",
           quantity: "15",
           valuesByCurrency: [
-            { currency: "ILS", value: "1000" },
-            { currency: "USD", value: "500" },
+            currencyValue({ currency: "ILS", value: "1000" }),
+            currencyValue({ currency: "USD", value: "500" }),
           ],
         },
       ],
@@ -100,14 +118,15 @@ describe("AssetsPage", () => {
     expect(screen.getByText(/\$500/)).toBeDefined();
   });
 
-  it("shows dashes for an Asset that isn't currently held", async () => {
+  it("shows a placeholder and no expand affordance for an Asset that isn't currently held", async () => {
     mockApi({ assets: [asset, unheldAsset], byAsset: [] });
 
     render(<AssetsPage />);
 
     await waitFor(() => expect(screen.getByText("Unheld Fund")).toBeDefined());
-    const row = screen.getByText("Unheld Fund").closest("tr")!;
-    expect(row.textContent).toContain("—");
+    const card = screen.getByText("Unheld Fund").closest("button") as HTMLButtonElement;
+    expect(card.textContent).toContain("—");
+    expect(card.disabled).toBe(true);
   });
 
   it("has no currency selector on this page", async () => {
@@ -117,5 +136,66 @@ describe("AssetsPage", () => {
 
     await waitFor(() => expect(screen.getByText("Example Corp")).toBeDefined());
     expect(screen.queryByLabelText("Display currency")).toBeNull();
+  });
+
+  it("expands a card to reveal profit/tax/return metrics, and collapses again", async () => {
+    mockApi({
+      byAsset: [
+        {
+          assetId: "asset-1",
+          quantity: "15",
+          valuesByCurrency: [
+            currencyValue({ costBasis: "800", profit: "200", taxOnProfit: "50", netOfTax: "950" }),
+          ],
+        },
+      ],
+    });
+
+    render(<AssetsPage />);
+    await waitFor(() => expect(screen.getByText("Example Corp")).toBeDefined());
+
+    expect(screen.queryByText("Cost basis")).toBeNull();
+
+    await userEvent.click(screen.getByText("Example Corp").closest("button")!);
+    expect(screen.getByText("Cost basis")).toBeDefined();
+    expect(screen.getByText(/₪800/)).toBeDefined(); // cost basis
+    expect(screen.getByText("Tax on profit")).toBeDefined();
+    expect(screen.getByText("Net of tax")).toBeDefined();
+
+    await userEvent.click(screen.getByText("Example Corp").closest("button")!);
+    expect(screen.queryByText("Cost basis")).toBeNull();
+  });
+
+  it("shows no XIRR row when xirr is null (too new or uncomputable)", async () => {
+    mockApi({
+      byAsset: [
+        { assetId: "asset-1", quantity: "15", valuesByCurrency: [currencyValue({ xirr: null })] },
+      ],
+    });
+
+    render(<AssetsPage />);
+    await waitFor(() => expect(screen.getByText("Example Corp")).toBeDefined());
+    await userEvent.click(screen.getByText("Example Corp").closest("button")!);
+
+    expect(screen.queryByText("XIRR")).toBeNull();
+  });
+
+  it("formats simpleReturnPct and xirr with their independent conventions (simpleReturnPct already a %, xirr a fraction)", async () => {
+    mockApi({
+      byAsset: [
+        {
+          assetId: "asset-1",
+          quantity: "15",
+          valuesByCurrency: [currencyValue({ simpleReturnPct: 25, xirr: 0.1 })],
+        },
+      ],
+    });
+
+    render(<AssetsPage />);
+    await waitFor(() => expect(screen.getByText("Example Corp")).toBeDefined());
+    await userEvent.click(screen.getByText("Example Corp").closest("button")!);
+
+    expect(screen.getByText("25.0%")).toBeDefined(); // simpleReturnPct: 25 -> "25.0%", not "2500.0%"
+    expect(screen.getByText("10.0%")).toBeDefined(); // xirr: 0.1 -> "10.0%", not "0.1%"
   });
 });
