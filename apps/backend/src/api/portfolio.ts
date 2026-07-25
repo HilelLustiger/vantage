@@ -5,6 +5,7 @@ import { aggregateByCurrency, aggregateHoldings } from "../shared/portfolioAggre
 import { gatherLatestConvertedHoldings } from "../shared/portfolioGathering.js";
 import { computePortfolioByAsset } from "../shared/portfolioByAsset.js";
 import { computePortfolioHistory } from "../shared/portfolioHistory.js";
+import { computeAssetCostBasisMetrics } from "../shared/assetCostBasis.js";
 import { requireAuth } from "./requireAuth.js";
 
 const querySchema = z.object({
@@ -81,6 +82,31 @@ portfolioRouter.get("/history", async (req, res) => {
 // FX lookups and no 502-on-FX-failure path.
 portfolioRouter.get("/by-asset", async (req, res) => {
   const userId = req.session.userId!;
-  const assets = await computePortfolioByAsset(userId);
+  const [holdingsByAsset, costBasisMetrics] = await Promise.all([
+    computePortfolioByAsset(userId),
+    computeAssetCostBasisMetrics(userId),
+  ]);
+  const metricsByKey = new Map(costBasisMetrics.map((m) => [`${m.assetId} ${m.currency}`, m]));
+
+  const assets = holdingsByAsset.map((breakdown) => ({
+    ...breakdown,
+    valuesByCurrency: breakdown.valuesByCurrency.map((v) => {
+      // Both functions walk the same gatherLatestHoldingsForUser(userId)
+      // result, so a match always exists (#43).
+      const metrics = metricsByKey.get(`${breakdown.assetId} ${v.currency}`)!;
+      return {
+        currency: v.currency,
+        value: v.value,
+        costBasis: metrics.costBasis,
+        costBasisSource: metrics.costBasisSource,
+        profit: metrics.profit,
+        simpleReturnPct: metrics.simpleReturnPct,
+        xirr: metrics.xirr,
+        taxOnProfit: metrics.taxOnProfit,
+        netOfTax: metrics.netOfTax,
+      };
+    }),
+  }));
+
   res.status(200).json({ userId, assets } satisfies PortfolioByAsset);
 });

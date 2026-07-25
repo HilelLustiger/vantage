@@ -1,7 +1,7 @@
 // Cost-basis resolution + profit/tax-on-profit/XIRR computation — see
 // ADR-0023 and #40/#41/#42. Pure computation module: no API route yet
 // (#43 wires this bundle into an endpoint).
-import type { CashFlow } from "@vantage/shared-types";
+import type { CashFlow, CostBasisSource } from "@vantage/shared-types";
 import { findCashFlowsForAsset } from "./db/cashFlows.js";
 import { gatherLatestHoldingsForUser } from "./portfolioByAsset.js";
 import { computeXirr } from "./xirr.js";
@@ -19,8 +19,6 @@ if (!Number.isFinite(TAX_RATE) || TAX_RATE < 0) {
 // "not meaningful, don't show it as if it were" contract simpleReturnPct
 // already uses for costBasis === 0, not a distinct error/reason field.
 const XIRR_MIN_HOLDING_DAYS = 90;
-
-export type CostBasisSource = "institution_stated" | "derived_from_cash_flows";
 
 export interface AssetCostBasisMetrics {
   assetId: string;

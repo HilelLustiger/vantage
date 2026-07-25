@@ -1,6 +1,16 @@
-import type { AssetHoldingBreakdown, Holding } from "@vantage/shared-types";
+import type { Holding } from "@vantage/shared-types";
 import { listHoldingsForSnapshot } from "./db/holdings.js";
 import { findLatestActiveSnapshotsForUser } from "./db/snapshots.js";
+
+// Quantity/value only — the wire type AssetHoldingBreakdown additionally
+// carries #40/#41/#42's cost-basis/return metrics (AssetCurrencyValue),
+// which this function doesn't compute. #43's API route merges this with
+// computeAssetCostBasisMetrics's output into the full wire shape.
+export interface AssetValueBreakdown {
+  assetId: string;
+  quantity: string;
+  valuesByCurrency: { currency: string; value: string }[];
+}
 
 // The "latest active Snapshot per Account -> its Holdings" walk, shared by
 // every current-holdings view (this file's own aggregation below, and
@@ -21,7 +31,7 @@ export async function gatherLatestHoldingsForUser(userId: string): Promise<Holdi
 // currency, no FX lookups, no conversion (and so no 502-on-FX-failure
 // path either) — deliberately the "show what's actually held" counterpart
 // to /api/portfolio's converted aggregate.
-export async function computePortfolioByAsset(userId: string): Promise<AssetHoldingBreakdown[]> {
+export async function computePortfolioByAsset(userId: string): Promise<AssetValueBreakdown[]> {
   const holdings = await gatherLatestHoldingsForUser(userId);
 
   const byAsset = new Map<string, { quantity: number; valuesByCurrency: Map<string, number> }>();

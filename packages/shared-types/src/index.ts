@@ -126,11 +126,27 @@ export interface PortfolioHistory {
   points: PortfolioHistoryPoint[];
 }
 
+// See ADR 0023/#40 — the institution's own directly-stated cost basis is
+// preferred; the derived sum only fills in when it isn't available.
+export type CostBasisSource = "institution_stated" | "derived_from_cash_flows";
+
 // Entity-level, native-currency holdings view — see ADR 0022. Never
-// converted, so no display-currency concept applies here at all.
+// converted, so no display-currency concept applies here at all. The
+// costBasis/profit/... fields are ADR 0023's per-Asset return metrics
+// (#40/#41/#42) — computed in this same native currency, no FX needed.
 export interface AssetCurrencyValue {
   currency: string;
   value: string;
+  costBasis: string;
+  costBasisSource: CostBasisSource;
+  profit: string;
+  /** null when costBasis is 0 — not meaningful, not 0%/Infinity/NaN. */
+  simpleReturnPct: number | null;
+  /** Money-weighted, annualized return. null when not computable or the
+   * position is under the minimum holding period — see #42. */
+  xirr: number | null;
+  taxOnProfit: string;
+  netOfTax: string;
 }
 
 export interface AssetHoldingBreakdown {
