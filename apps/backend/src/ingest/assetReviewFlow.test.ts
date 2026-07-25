@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createAccountWithOwners } from "../shared/db/accounts.js";
 import { createAsset, findAssetsByTicker } from "../shared/db/assets.js";
+import { findCashFlowsForAsset } from "../shared/db/cashFlows.js";
 import { findDocumentById, insertDocument } from "../shared/db/documents.js";
 import { createInstitution } from "../shared/db/institutions.js";
 import { createUser } from "../shared/db/users.js";
@@ -62,6 +63,91 @@ describe("buildReviewLines", () => {
 
   it("returns null when parsedData does not validate", () => {
     expect(buildReviewLines({ notHoldings: true }, null)).toBeNull();
+  });
+
+  // Real shape from apps/parser/hapoalim_transactions.py (#37) — no
+  // "quantity"/"value" the way a holding has. Reused onto the existing
+  // fields (quantity <- kind, value <- signed derived flow amount) so
+  // ReviewDocumentPage.tsx needs no changes (#38).
+  it("maps a flow-kind transaction onto the existing quantity/value fields", () => {
+    const lines = buildReviewLines(
+      {
+        transactions: [
+          {
+            date: "18/08/2025",
+            securityNumber: "1234567",
+            assetName: "Money Market Fund",
+            kind: "buy",
+            amount: "250.64",
+            currency: "ILS",
+          },
+        ],
+      },
+      [null],
+    );
+
+    expect(lines).toEqual([
+      {
+        index: 0,
+        assetName: "Money Market Fund",
+        quantity: "buy",
+        value: "250.64",
+        currency: "ILS",
+      },
+    ]);
+  });
+
+  it("excludes non-flow-kind transactions (e.g. dividend) from review lines entirely", () => {
+    const lines = buildReviewLines(
+      {
+        transactions: [
+          {
+            date: "02/06/2026",
+            securityNumber: "662577",
+            assetName: "Dividend Payer",
+            kind: "dividend",
+            amount: "1.95",
+            currency: "ILS",
+          },
+        ],
+      },
+      [],
+    );
+
+    expect(lines).toEqual([]);
+  });
+
+  it("combines holdings and flow transactions into one positionally-aligned list", () => {
+    const lines = buildReviewLines(
+      {
+        holdings: [
+          { assetName: "Existing Corp", quantity: "5", value: "500", currency: "ILS" },
+        ],
+        transactions: [
+          {
+            date: "18/08/2025",
+            securityNumber: "1234567",
+            assetName: "Money Market Fund",
+            kind: "sell",
+            amount: "100.37",
+            currency: "ILS",
+          },
+        ],
+      },
+      [null, "already-matched-asset-id"],
+    );
+
+    expect(lines).toEqual([
+      { index: 0, assetName: "Existing Corp", quantity: "5", value: "500", currency: "ILS" },
+      {
+        index: 1,
+        assetName: "Money Market Fund",
+        quantity: "sell",
+        value: "-100.37",
+        currency: "ILS",
+        resolvedAssetId: "already-matched-asset-id",
+      },
+    ]);
   });
 });
 
@@ -184,6 +270,41 @@ describe("applyResolutions", () => {
       reason: "every unmatched line must be resolved (missing: 1)",
     });
     expect((await findDocumentById(document.id))?.status).toBe("needs_review");
+  });
+
+  it("resolves a flow-kind transaction line through to a committed cash_flows row", async () => {
+    const account = await createTestAccount();
+    const document = await createNeedsReviewDocument(account.id, [null]);
+    const asset = await createAsset({ type: "mutual_fund", name: "Money Market" });
+    const transactionsOnlyData = {
+      transactions: [
+        {
+          date: "18/08/2025",
+          securityNumber: "1234567",
+          assetName: "Money Market Fund",
+          kind: "buy",
+          amount: "250.64",
+          currency: "ILS",
+        },
+      ],
+    };
+
+    const result = await applyResolutions(document.id, account.id, transactionsOnlyData, [null], [
+      { index: 0, assetId: asset.id },
+    ]);
+
+    expect(result).toEqual({ ok: true });
+    expect((await findDocumentById(document.id))?.status).toBe("committed");
+    const flows = await findCashFlowsForAsset(asset.id);
+    expect(flows).toEqual([
+      expect.objectContaining({
+        assetId: asset.id,
+        date: "2025-08-18",
+        amount: "250.64",
+        kind: "buy",
+        source: "ingested_transaction",
+      }),
+    ]);
   });
 
   it("surfaces a downstream commit failure as commit_failed", async () => {

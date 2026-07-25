@@ -107,9 +107,10 @@ export const documents = pgTable("documents", {
   // The parser service's `reason` string on a failed parse. Short and
   // non-PII, safe to expose on Document (unlike parsedData).
   failureReason: text("failure_reason"),
-  // Per-holding Asset match results from #20 — a (string | null)[],
-  // positionally aligned with parsedData's holdings array. Internal only,
-  // same reasoning as parsedData; #21/#10 consume this.
+  // Asset match results from #20 — a (string | null)[], positionally
+  // aligned with [...parsedData.holdings, ...flow-kind transactions]
+  // (ADR-0023/#38). Internal only, same reasoning as parsedData; #21/#10
+  // consume this. Column name predates #38's broadened alignment.
   resolvedHoldings: json("resolved_holdings"),
 });
 

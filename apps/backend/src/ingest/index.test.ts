@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { createAccountWithOwners } from "../shared/db/accounts.js";
 import { createAsset } from "../shared/db/assets.js";
+import { findCashFlowsForAsset } from "../shared/db/cashFlows.js";
 import { db } from "../shared/db/client.js";
 import { findDocumentById, insertDocument } from "../shared/db/documents.js";
 import { listHoldingsForSnapshot } from "../shared/db/holdings.js";
@@ -183,6 +184,37 @@ describe("ingest.startImport", () => {
     const final = await findDocumentById(document.id);
     expect(final?.status).toBe("failed");
     expect(final?.failureReason).toContain("not a real date");
+  });
+
+  it("reaches committed with zero Snapshots for a Hapoalim-transactions-shaped (flows-only) parse", async () => {
+    const securityNumber = `SEC-${randomUUID()}`;
+    const asset = await createAsset({ type: "mutual_fund", name: "Money Market", securityNumber });
+    vi.mocked(parseDocument).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        institution: "Bank Hapoalim",
+        transactions: [
+          {
+            date: "18/08/2025",
+            securityNumber,
+            assetName: "Money Market Fund",
+            kind: "buy",
+            amount: "250.64",
+            currency: "ILS",
+          },
+        ],
+      },
+    });
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await ingest.startImport(document.id);
+
+    expect((await findDocumentById(document.id))?.status).toBe("committed");
+    await expect(findActiveSnapshot(account.id, "2025-08-18")).resolves.toBeUndefined();
+    await expect(findCashFlowsForAsset(asset.id)).resolves.toEqual([
+      expect.objectContaining({ date: "2025-08-18", amount: "250.64", kind: "buy" }),
+    ]);
   });
 
   it("transitions to failed with the reason on an unsuccessful parse", async () => {

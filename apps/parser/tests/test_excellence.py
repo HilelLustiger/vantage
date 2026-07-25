@@ -92,6 +92,7 @@ def test_extracts_and_reconciles_a_transactions_table() -> None:
     assert deposit["securityNumber"] is None
     assert deposit["kind"] == "deposit"
     assert deposit["amount"] == "500.0"
+    assert deposit["currency"] == "ILS"
     assert deposit["balanceAfter"] == "500.0"
     assert deposit["valueDate"] == "02/06/2024"
 

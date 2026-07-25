@@ -133,4 +133,81 @@ describe("resolveAssets", () => {
   it("returns null for completely unrelated data", async () => {
     await expect(resolveAssets("not an object")).resolves.toBeNull();
   });
+
+  // Real shape from apps/parser/hapoalim_transactions.py (#37) — a
+  // transactions-only, holdings-free Document. Flow-kind transactions
+  // resolve through the same securityNumber path as a holding.
+  it("matches a flow-kind transaction by securityNumber, holdings-free", async () => {
+    const securityNumber = `SEC-${randomUUID()}`;
+    const asset = await createAsset({ type: "mutual_fund", name: "Money Market", securityNumber });
+
+    const result = await resolveAssets({
+      institution: "Bank Hapoalim",
+      transactions: [
+        {
+          date: "18/08/2025",
+          securityNumber,
+          assetName: "קרן כספית",
+          kind: "buy",
+          amount: "250.64",
+          currency: "ILS",
+        },
+      ],
+    });
+
+    expect(result).toEqual({ resolvedAssetIds: [asset.id], hasUnmatched: false });
+  });
+
+  it("does not force review for a dividend transaction alongside an unmatched holding", async () => {
+    const result = await resolveAssets({
+      holdings: [{ assetName: "Unrecognized Fund", quantity: "1", value: "1000", currency: "ILS" }],
+      transactions: [
+        {
+          date: "02/06/2026",
+          securityNumber: "662577",
+          assetName: "בנק הפועלים דיבידנד",
+          kind: "dividend",
+          amount: "1.95",
+          currency: "ILS",
+        },
+      ],
+    });
+
+    // Only the holding is resolved (unmatched) — the dividend row never
+    // reaches matchHolding at all, since it's filtered out before
+    // resolution (it won't become a cash_flows row either way).
+    expect(result).toEqual({ resolvedAssetIds: [null], hasUnmatched: true });
+  });
+
+  it("resolves holdings and flow transactions together as one combined, positionally-aligned list", async () => {
+    const ticker = `TICK-${randomUUID()}`;
+    const holdingAsset = await createAsset({ type: "stock", name: "Example Corp", ticker });
+    const flowSecurityNumber = `SEC-${randomUUID()}`;
+    const flowAsset = await createAsset({
+      type: "etf",
+      name: "S&P 500",
+      securityNumber: flowSecurityNumber,
+    });
+
+    const result = await resolveAssets({
+      holdings: [
+        { assetName: "Example Corp", quantity: "10", value: "1000", currency: "ILS", ticker },
+      ],
+      transactions: [
+        {
+          date: "18/08/2025",
+          securityNumber: flowSecurityNumber,
+          assetName: "S&P 500",
+          kind: "sell",
+          amount: "100.37",
+          currency: "ILS",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      resolvedAssetIds: [holdingAsset.id, flowAsset.id],
+      hasUnmatched: false,
+    });
+  });
 });

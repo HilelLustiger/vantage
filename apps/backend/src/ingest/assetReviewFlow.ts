@@ -6,6 +6,7 @@
 import { z } from "zod";
 import type { DocumentReviewLine, DocumentResolution } from "@vantage/shared-types";
 import { createAsset, findAssetById } from "../shared/db/assets.js";
+import { deriveFlowAmount, selectFlowTransactions } from "./cashFlowTransactions.js";
 import { commitSnapshot } from "./snapshotCreation.js";
 
 // Same shape/rationale as assetResolution.ts's and snapshotCreation.ts's
@@ -20,12 +21,27 @@ const holdingSchema = z
   })
   .passthrough();
 
-const parsedDataSchema = z
+const transactionSchema = z
   .object({
-    holdings: z.array(holdingSchema),
+    assetName: z.string(),
+    kind: z.string(),
+    amount: z.string(),
+    currency: z.string(),
   })
   .passthrough();
 
+const parsedDataSchema = z
+  .object({
+    holdings: z.array(holdingSchema).optional(),
+    transactions: z.array(transactionSchema).optional(),
+  })
+  .passthrough();
+
+// A flow-kind transaction has no natural quantity/value the way a holding
+// does. Rather than redesigning DocumentReviewLine/the review UI for a
+// second line shape, it's mapped onto the existing fields — quantity ←
+// kind (e.g. "buy"), value ← the signed derived flow amount — so
+// ReviewDocumentPage.tsx renders it ("buy · 250.64 ILS") with no changes.
 export function buildReviewLines(
   parsedData: unknown,
   resolvedHoldings: (string | null)[] | null,
@@ -34,15 +50,28 @@ export function buildReviewLines(
   if (!parsed.success) {
     return null;
   }
+  if (parsed.data.holdings === undefined && parsed.data.transactions === undefined) {
+    return null;
+  }
 
-  return parsed.data.holdings.map((holding, index) => {
+  const holdingLines = (parsed.data.holdings ?? []).map((holding) => ({
+    assetName: holding.assetName,
+    quantity: holding.quantity,
+    value: holding.value,
+    currency: holding.currency,
+  }));
+  const flowLines = selectFlowTransactions(parsed.data.transactions ?? []).map((transaction) => ({
+    assetName: transaction.assetName,
+    quantity: transaction.kind,
+    value: deriveFlowAmount(transaction.kind, transaction.amount),
+    currency: transaction.currency,
+  }));
+
+  return [...holdingLines, ...flowLines].map((line, index) => {
     const resolvedAssetId = resolvedHoldings?.[index];
     return {
       index,
-      assetName: holding.assetName,
-      quantity: holding.quantity,
-      value: holding.value,
-      currency: holding.currency,
+      ...line,
       ...(resolvedAssetId ? { resolvedAssetId } : {}),
     };
   });
@@ -69,8 +98,11 @@ export async function applyResolutions(
     return { ok: false, kind: "invalid_request", reason: "parsed data was not in the expected shape" };
   }
 
+  const lineCount =
+    (parsed.data.holdings?.length ?? 0) +
+    selectFlowTransactions(parsed.data.transactions ?? []).length;
   const current = [...(resolvedHoldings ?? [])];
-  if (current.length !== parsed.data.holdings.length) {
+  if (current.length !== lineCount) {
     return {
       ok: false,
       kind: "invalid_request",

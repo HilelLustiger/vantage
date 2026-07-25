@@ -139,6 +139,7 @@ def _extract_transactions(
                 "quantity": qty.replace(",", ""),
                 "priceIls": round(parse_amount(price) / 100, 4) if security_number else None,
                 "amount": str(parse_amount(amount)),
+                "currency": "ILS",  # same as holdings above — this statement is ILS-only
                 "fee": str(parse_amount(fee)),
                 "tax": str(parse_amount(tax)),
                 "balanceAfter": str(parse_amount(balance_after)),

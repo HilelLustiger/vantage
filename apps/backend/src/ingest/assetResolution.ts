@@ -10,6 +10,7 @@ import {
   findAssetsBySecurityNumber,
   findAssetsByTicker,
 } from "../shared/db/assets.js";
+import { selectFlowTransactions } from "./cashFlowTransactions.js";
 
 // The one thing every extractor's output shares. .passthrough() lets
 // institution-specific extras (checks, accountHolderName, annualReturnPct,
@@ -21,20 +22,41 @@ const holdingSchema = z
     quantity: z.string(),
     value: z.string(),
     currency: z.string(),
-    ticker: z.string().optional(),
-    isin: z.string().optional(),
-    securityNumber: z.string().optional(),
+    ticker: z.string().nullish(),
+    isin: z.string().nullish(),
+    securityNumber: z.string().nullish(),
+  })
+  .passthrough();
+
+// Per-transaction rows (ADR-0024, #36/#37) — resolved the same way as
+// holdings. Only the flow-kind subset (see cashFlowTransactions.ts)
+// actually needs a resolved Asset; the rest are filtered out before ever
+// reaching matchHolding, so a dividend/interest/other row never forces a
+// needs_review batch for data that won't be persisted anyway.
+// securityNumber/ticker/isin are `.nullish()`, not just `.optional()` —
+// real data (Excellence's own pseudo-code rows, e.g. a cash deposit) emits
+// an explicit JSON `null` for an unmatched candidate, not an absent key
+// (Python's `None`), and zod's `.optional()` alone rejects `null`.
+const transactionSchema = z
+  .object({
+    assetName: z.string(),
+    kind: z.string(),
+    amount: z.string(),
+    ticker: z.string().nullish(),
+    isin: z.string().nullish(),
+    securityNumber: z.string().nullish(),
   })
   .passthrough();
 
 const parsedDataSchema = z
   .object({
-    holdings: z.array(holdingSchema),
+    holdings: z.array(holdingSchema).optional(),
+    transactions: z.array(transactionSchema).optional(),
   })
   .passthrough();
 
 export interface AssetResolution {
-  // Positionally aligned with parsedData.holdings.
+  // Positionally aligned with [...holdings, ...flow-kind transactions].
   resolvedAssetIds: (string | null)[];
   hasUnmatched: boolean;
 }
@@ -47,19 +69,29 @@ export async function resolveAssets(parsedData: unknown): Promise<AssetResolutio
   if (!parsed.success) {
     return null;
   }
+  if (parsed.data.holdings === undefined && parsed.data.transactions === undefined) {
+    // Neither key present at all isn't a recognized shape this pipeline
+    // can commit anything from.
+    return null;
+  }
+
+  const lines = [
+    ...(parsed.data.holdings ?? []),
+    ...selectFlowTransactions(parsed.data.transactions ?? []),
+  ];
 
   const resolvedAssetIds: (string | null)[] = [];
-  for (const holding of parsed.data.holdings) {
-    resolvedAssetIds.push(await matchHolding(holding));
+  for (const line of lines) {
+    resolvedAssetIds.push(await matchHolding(line));
   }
 
   return { resolvedAssetIds, hasUnmatched: resolvedAssetIds.includes(null) };
 }
 
 async function matchHolding(holding: {
-  ticker?: string;
-  isin?: string;
-  securityNumber?: string;
+  ticker?: string | null;
+  isin?: string | null;
+  securityNumber?: string | null;
 }): Promise<string | null> {
   // A match is only confident when it's exactly one — zero or more than one
   // (ticker/isin/securityNumber have no unique constraint, ADR-0008) is
