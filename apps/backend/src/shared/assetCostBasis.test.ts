@@ -28,6 +28,10 @@ async function createTestUserAndAccount(name = "Test Account") {
   return { user, account };
 }
 
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 async function commitTestSnapshot(
   accountId: string,
   holdings: {
@@ -85,6 +89,7 @@ describe("computeAssetCostBasisMetrics", () => {
         costBasisSource: "institution_stated",
         profit: "360.48",
         simpleReturnPct: 2.2, // 360.48 / 16359.52 * 100
+        xirr: null, // no cash_flows at all for this asset, nothing to solve from
         taxOnProfit: "90.12", // 360.48 * 0.25, TAX_RATE from the test env
         netOfTax: "16629.88",
       },
@@ -267,5 +272,92 @@ describe("computeAssetCostBasisMetrics", () => {
     expect(new Set(result.map((r) => `${r.currency}:${r.profit}`))).toEqual(
       new Set(["ILS:100", "USD:50"]),
     );
+  });
+
+  it("computes a correct xirr for a holding old enough with a clean flow history", async () => {
+    const { user, account } = await createTestUserAndAccount();
+    const asset = await createAsset({ type: "stock", name: `Asset ${randomUUID()}` });
+    await commitTestSnapshot(
+      account.id,
+      [{ assetName: asset.name, quantity: "1", value: "1100", currency: "ILS" }],
+      [asset.id],
+    );
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await insertCashFlow({
+      accountId: account.id,
+      assetId: asset.id,
+      documentId: document.id,
+      date: daysAgo(365),
+      amount: "1000",
+      currency: "ILS",
+      kind: "buy",
+      source: "ingested_transaction",
+    });
+
+    const result = await computeAssetCostBasisMetrics(user.id);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].xirr).not.toBeNull();
+    expect(result[0].xirr!).toBeCloseTo(0.1, 1); // ~10%, a 1000 -> 1100 round trip over ~1 year
+  });
+
+  it("returns xirr: null for a brand-new holding regardless of how clean its flow history is", async () => {
+    const { user, account } = await createTestUserAndAccount();
+    const asset = await createAsset({ type: "stock", name: `Asset ${randomUUID()}` });
+    await commitTestSnapshot(
+      account.id,
+      [{ assetName: asset.name, quantity: "1", value: "1100", currency: "ILS" }],
+      [asset.id],
+    );
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await insertCashFlow({
+      accountId: account.id,
+      assetId: asset.id,
+      documentId: document.id,
+      date: daysAgo(30), // under the 90-day minimum holding period
+      amount: "1000",
+      currency: "ILS",
+      kind: "buy",
+      source: "ingested_transaction",
+    });
+
+    const result = await computeAssetCostBasisMetrics(user.id);
+
+    expect(result[0].xirr).toBeNull();
+  });
+
+  it("still computes xirr on the institution_stated cost-basis path (flows aren't skipped just because purchaseCostIls won)", async () => {
+    const { user, account } = await createTestUserAndAccount();
+    const asset = await createAsset({ type: "etf", name: `Asset ${randomUUID()}` });
+    await commitTestSnapshot(
+      account.id,
+      [
+        {
+          assetName: asset.name,
+          quantity: "1",
+          value: "1100",
+          currency: "ILS",
+          purchaseCostIls: 1000,
+        },
+      ],
+      [asset.id],
+    );
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await insertCashFlow({
+      accountId: account.id,
+      assetId: asset.id,
+      documentId: document.id,
+      date: daysAgo(365),
+      amount: "1000",
+      currency: "ILS",
+      kind: "buy",
+      source: "ingested_transaction",
+    });
+
+    const result = await computeAssetCostBasisMetrics(user.id);
+
+    expect(result[0].costBasisSource).toBe("institution_stated");
+    expect(result[0].xirr).not.toBeNull();
+    expect(result[0].xirr!).toBeCloseTo(0.1, 1);
   });
 });
