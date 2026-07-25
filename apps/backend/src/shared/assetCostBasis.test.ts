@@ -84,6 +84,7 @@ describe("computeAssetCostBasisMetrics", () => {
         costBasis: "16359.52",
         costBasisSource: "institution_stated",
         profit: "360.48",
+        simpleReturnPct: 2.2, // 360.48 / 16359.52 * 100
         taxOnProfit: "90.12", // 360.48 * 0.25, TAX_RATE from the test env
         netOfTax: "16629.88",
       },
@@ -117,6 +118,7 @@ describe("computeAssetCostBasisMetrics", () => {
         costBasis: "1000",
         costBasisSource: "derived_from_cash_flows",
         profit: "200",
+        simpleReturnPct: 20, // 200 / 1000 * 100
       }),
     ]);
   });
@@ -187,11 +189,14 @@ describe("computeAssetCostBasisMetrics", () => {
         costBasis: "0",
         costBasisSource: "derived_from_cash_flows",
         profit: "500",
+        // A percentage return on zero investment isn't meaningful — null,
+        // not 0%/Infinity/NaN.
+        simpleReturnPct: null,
       }),
     ]);
   });
 
-  it("never produces a negative taxOnProfit for a loss", async () => {
+  it("never produces a negative taxOnProfit for a loss, and computes a negative simpleReturnPct", async () => {
     const { user, account } = await createTestUserAndAccount();
     const asset = await createAsset({ type: "etf", name: `Asset ${randomUUID()}` });
     await commitTestSnapshot(
@@ -213,6 +218,7 @@ describe("computeAssetCostBasisMetrics", () => {
     expect(result).toEqual([
       expect.objectContaining({
         profit: "-300",
+        simpleReturnPct: -37.5, // -300 / 800 * 100
         taxOnProfit: "0",
         netOfTax: "500",
       }),
