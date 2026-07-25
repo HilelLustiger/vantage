@@ -9,6 +9,7 @@ from typing import Any, Callable, TypedDict
 from excellence import extract_excellence_securities
 from gemel import extract_gemel_statement
 from hapoalim import extract_hapoalim_securities
+from hapoalim_transactions import extract_hapoalim_transactions
 
 
 class _Entry(TypedDict):
@@ -38,6 +39,20 @@ _ENTRIES: list[_Entry] = [
         # raw text, not the display-corrected text used everywhere else.
         "matches": lambda text, raw_text: "bankhapoalim" in raw_text[:200],
         "extract": extract_hapoalim_securities,
+    },
+    {
+        # Same institution, a second recognized document shape — the
+        # account-transactions export (ADR-0024), from a different bank
+        # portal page than the balance report above. Verified against real
+        # samples: this URL fragment appears only in the transactions
+        # export's page-footer text, never in the balance report's, and the
+        # balance report's own "bankhapoalim" match above never appears in
+        # this export within its [:200] window — the two signatures are
+        # confirmed disjoint, see test_registry.py.
+        "institution": "Bank Hapoalim",
+        "format": "pdf",
+        "matches": lambda text, raw_text: "current-account/transactions" in raw_text,
+        "extract": extract_hapoalim_transactions,
     },
     {
         "institution": "אקסלנס",

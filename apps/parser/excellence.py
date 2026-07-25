@@ -15,7 +15,7 @@ already netted into amount, never a separate deduction to reapply."""
 import re
 from typing import Any
 
-from common import find, parse_amount
+from common import classify_kind, find, normalize_2digit_year, parse_amount
 
 
 def extract_excellence_securities(text: str) -> dict[str, Any]:
@@ -99,35 +99,6 @@ _DATE_2DIGIT_YEAR_RE = re.compile(r"\d{2}/\d{2}/\d{2}")
 _TIME_RE = re.compile(r"\d{2}:\d{2}")
 _ID_CANDIDATE_RE = re.compile(r"\b\d{5,7}\b")
 
-# Extensible — based only on what's actually appeared in real samples so
-# far (see sandbox/). Order matters: first match wins.
-_KIND_KEYWORDS = [
-    ("קניה", "buy"),
-    ("ק/", "buy"),
-    ("מכירה", "sell"),
-    ("דיבידנד", "dividend"),
-    ("הפקדה", "deposit"),
-    ("ריבית", "interest"),
-    ("משיכה", "withdrawal"),
-]
-
-
-def _normalize_2digit_year(date: str) -> str:
-    """'17/09/24' -> '17/09/2024' — assumes 20xx, matching every real sample
-    and this app's realistic usage range. The transactions table uses
-    2-digit years; the rest of the document (and every other real sample in
-    this app) uses 4-digit years — a real inconsistency within one
-    document, normalized here so downstream consumers see one format."""
-    day, month, year = date.split("/")
-    return f"{day}/{month}/20{year}"
-
-
-def _classify_kind(description: str) -> str:
-    for keyword, kind in _KIND_KEYWORDS:
-        if keyword in description:
-            return kind
-    return "other"
-
 
 def _extract_transactions(
     lines: list[str], known_security_numbers: set[str]
@@ -144,7 +115,7 @@ def _extract_transactions(
         prefix, qty, price, amount, fee, tax, balance_after, value_date = m.groups()
 
         dates_found = _DATE_2DIGIT_YEAR_RE.findall(prefix)
-        transaction_date = _normalize_2digit_year(dates_found[0]) if dates_found else None
+        transaction_date = normalize_2digit_year(dates_found[0]) if dates_found else None
 
         remainder = _DATE_2DIGIT_YEAR_RE.sub(" ", prefix)
         remainder = _TIME_RE.sub(" ", remainder)
@@ -164,14 +135,14 @@ def _extract_transactions(
                 "date": transaction_date,
                 "securityNumber": security_number,
                 "assetName": description,
-                "kind": _classify_kind(description),
+                "kind": classify_kind(description),
                 "quantity": qty.replace(",", ""),
                 "priceIls": round(parse_amount(price) / 100, 4) if security_number else None,
                 "amount": str(parse_amount(amount)),
                 "fee": str(parse_amount(fee)),
                 "tax": str(parse_amount(tax)),
                 "balanceAfter": str(parse_amount(balance_after)),
-                "valueDate": _normalize_2digit_year(value_date),
+                "valueDate": normalize_2digit_year(value_date),
             }
         )
 
