@@ -10,6 +10,7 @@ service boundary (ADR-0003)."""
 
 from typing import Any, Callable, TypedDict
 
+from document_template import ValidityFailure
 from excellence import extract_excellence_securities
 from gemel import extract_gemel_statement
 from hapoalim import extract_hapoalim_securities
@@ -21,7 +22,11 @@ class _Entry(TypedDict):
     document_type: str
     layout: str
     matches: Callable[[str, str], bool]
-    extract: Callable[[str], dict[str, Any]]
+    # dict | ValidityFailure widens ahead of any entry actually producing
+    # the latter — no hand-written extractor here does (ADR-0026's
+    # DocumentTemplate/ExtractionEngine can; #52-#55 are what replace these
+    # entries with one once each institution's real template exists).
+    extract: Callable[[str], "dict[str, Any] | ValidityFailure"]
 
 
 _ENTRIES: list[_Entry] = [
@@ -79,7 +84,7 @@ _ENTRIES: list[_Entry] = [
 ]
 
 
-def detect_and_extract(text: str, raw_text: str) -> dict[str, Any] | None:
+def detect_and_extract(text: str, raw_text: str) -> "dict[str, Any] | ValidityFailure | None":
     """text: bidi-fixed page text. raw_text: pdfplumber's unfixed output —
     needed for ASCII/URL signatures where bidi-fixing is a no-op anyway but
     keeping the distinction explicit avoids relying on that coincidence.

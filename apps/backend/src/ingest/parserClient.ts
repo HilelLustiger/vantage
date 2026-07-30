@@ -3,9 +3,18 @@
 // real per-(institution, format) registry lives entirely on that side
 // (apps/parser/registry.py, ADR-0014); institution detection is content-based
 // now, not caller-supplied (ADR-0021), so this contract is just format + file.
-import type { DocumentFormat } from "@vantage/shared-types";
+import type { DocumentFormat, ValidityCheckResult } from "@vantage/shared-types";
 
-export type ParseResult = { ok: true; data: unknown } | { ok: false; reason: string };
+// A third outcome alongside ok:true/false (ADR-0026): the parser recognized
+// the Document but its own completeness gate or a reconcile check flagged
+// something needing a human — ok:false here too (not a clean success), but
+// distinguished by needsReview so the caller can route it to
+// transitionDocumentToNeedsReviewForValidityFailure instead of a terminal
+// failure.
+export type ParseResult =
+  | { ok: true; data: unknown }
+  | { ok: false; reason: string }
+  | { ok: false; needsReview: true; values: unknown; failedChecks: ValidityCheckResult[] };
 
 export async function parseDocument(
   file: Buffer,

@@ -7,6 +7,7 @@ import {
   storeResolvedHoldings,
   transitionDocument,
   transitionDocumentToNeedsReview,
+  transitionDocumentToNeedsReviewForValidityFailure,
   transitionDocumentWithFailure,
 } from "./documents.js";
 import { parseDocument } from "./parserClient.js";
@@ -43,6 +44,14 @@ export const ingest: IngestModule = {
     const file = await readDocumentFile(documentId);
     const result = await parseDocument(file, document.format);
     if (!result.ok) {
+      if ("needsReview" in result) {
+        await transitionDocumentToNeedsReviewForValidityFailure(
+          documentId,
+          result.values,
+          result.failedChecks,
+        );
+        return;
+      }
       await transitionDocumentWithFailure(documentId, result.reason);
       return;
     }

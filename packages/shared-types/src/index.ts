@@ -69,6 +69,16 @@ export type DocumentFormat = "pdf";
 // exists today; Transactions isn't designed yet.
 export type DocumentFeature = "investments" | "transactions";
 
+// One failed check from the parser service's ExtractionEngine — either a
+// verify_matches mismatch or a required field/table that was missing
+// entirely (computed/claimed null in that case). See ADR-0026.
+export interface ValidityCheckResult {
+  name: string;
+  computed: number | null;
+  claimed: number | null;
+  matched: boolean;
+}
+
 export interface Document {
   id: string;
   accountId: string;
@@ -82,6 +92,11 @@ export interface Document {
   uploadedAt: string;
   /** Why parsing failed, when status is "failed" — from the parser service. */
   failureReason?: string;
+  /** Why status is "needs_review" *because the parser itself* flagged it
+   * (ADR-0026) — distinct from the existing asset-resolution needs_review
+   * path (ADR-0010), which has no failed checks, just unmatched Holdings.
+   * Undefined for every other needs_review cause. */
+  validityFailedChecks?: ValidityCheckResult[];
 }
 
 export interface PortfolioLine {

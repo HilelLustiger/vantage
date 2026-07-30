@@ -39,6 +39,32 @@ describe("parseDocument", () => {
     });
   });
 
+  it("passes through a needs-review parse result", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ok: false,
+              needsReview: true,
+              values: { endingBalance: null },
+              failedChecks: [
+                { name: "endingBalance", computed: null, claimed: null, matched: false },
+              ],
+            }),
+          ),
+      ),
+    );
+
+    await expect(parseDocument(Buffer.from("x"), "pdf")).resolves.toEqual({
+      ok: false,
+      needsReview: true,
+      values: { endingBalance: null },
+      failedChecks: [{ name: "endingBalance", computed: null, claimed: null, matched: false }],
+    });
+  });
+
   it("passes through a failed parse result", async () => {
     vi.stubGlobal(
       "fetch",

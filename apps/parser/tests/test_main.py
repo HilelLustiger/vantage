@@ -1,8 +1,17 @@
+import io
+
+import main
+from document_template import ValidityFailure, ValidityResult
 from fastapi.testclient import TestClient
+from reportlab.pdfgen import canvas
 
-from main import app
+client = TestClient(main.app)
 
-client = TestClient(app)
+
+def _minimal_valid_pdf() -> bytes:
+    buf = io.BytesIO()
+    canvas.Canvas(buf).save()
+    return buf.getvalue()
 
 
 def test_health() -> None:
@@ -45,3 +54,29 @@ def test_parse_requires_a_file() -> None:
         data={"format": "pdf"},
     )
     assert response.status_code == 422
+
+
+def test_parse_reports_needs_review_on_validity_failure(monkeypatch) -> None:
+    # No real registry entry produces a ValidityFailure yet (ADR-0026's
+    # DocumentTemplate/ExtractionEngine isn't wired into any institution
+    # until #52-#55) — monkeypatching detect_and_extract exercises this
+    # response shape ahead of that, same synthetic-data spirit as #49.
+    failure = ValidityFailure(
+        values={"endingBalance": None},
+        failed_checks=[ValidityResult("endingBalance", None, None, False)],
+    )
+    monkeypatch.setattr(main, "detect_and_extract", lambda text, raw_text: failure)
+
+    response = client.post(
+        "/parse",
+        data={"format": "pdf"},
+        files={"file": ("statement.pdf", _minimal_valid_pdf(), "application/pdf")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is False
+    assert body["needsReview"] is True
+    assert body["values"] == {"endingBalance": None}
+    assert body["failedChecks"] == [
+        {"name": "endingBalance", "computed": None, "claimed": None, "matched": False}
+    ]

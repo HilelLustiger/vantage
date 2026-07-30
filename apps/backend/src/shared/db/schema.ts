@@ -16,6 +16,7 @@ import type {
   DocumentFeature,
   DocumentFormat,
   DocumentStatus,
+  ValidityCheckResult,
 } from "@vantage/shared-types";
 
 export const users = pgTable("users", {
@@ -112,6 +113,13 @@ export const documents = pgTable("documents", {
   // (ADR-0023/#38). Internal only, same reasoning as parsedData; #21/#10
   // consume this. Column name predates #38's broadened alignment.
   resolvedHoldings: json("resolved_holdings"),
+  // Which ExtractionEngine checks failed, when needs_review was reached via
+  // ADR-0026's validity-failure path (as opposed to ADR-0010's asset-
+  // resolution path, which has no failed checks). Exposed on the Document
+  // wire type, unlike parsedData/resolvedHoldings — small and structured,
+  // same reasoning as failureReason. parsedData carries the raw values for
+  // this same case (ValidityFailure.values), no separate column needed.
+  validityFailedChecks: json("validity_failed_checks").$type<ValidityCheckResult[]>(),
 });
 
 // See docs/ADR/0009-snapshot-immutability-and-supersede.md: immutable once

@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Any, Literal
 
 import pdfplumber
@@ -5,6 +6,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from pydantic import BaseModel
 
 from common import fix_rtl
+from document_template import ValidityFailure
 from registry import detect_and_extract
 
 app = FastAPI()
@@ -19,6 +21,12 @@ class ParseResponse(BaseModel):
     ok: bool
     data: Any | None = None
     reason: str | None = None
+    # A third outcome alongside ok=True/False (ADR-0026): the Document was
+    # recognized, but ExtractionEngine's completeness gate or a reconcile
+    # check found something needing a human — never true when ok=True.
+    needsReview: bool = False
+    values: Any | None = None
+    failedChecks: list[dict[str, Any]] | None = None
 
 
 @app.post("/parse")
@@ -45,4 +53,11 @@ async def parse(
     data = detect_and_extract(text, raw_text)
     if data is None:
         return ParseResponse(ok=False, reason="no matching parser (unrecognized institution)")
+    if isinstance(data, ValidityFailure):
+        return ParseResponse(
+            ok=False,
+            needsReview=True,
+            values=data.values,
+            failedChecks=[asdict(check) for check in data.failed_checks],
+        )
     return ParseResponse(ok=True, data=data)

@@ -71,6 +71,13 @@
       "when": 1784969777090,
       "tag": "0009_redundant_gorilla_man",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785421091190,
+      "tag": "0010_gifted_wasp",
+      "breakpoints": true
     }
   ]
 }

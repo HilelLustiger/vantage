@@ -23,6 +23,7 @@ function toDocument(row: typeof documents.$inferSelect): Document {
     dateRangeEnd: row.dateRangeEnd ?? undefined,
     uploadedAt: row.uploadedAt.toISOString(),
     failureReason: row.failureReason ?? undefined,
+    validityFailedChecks: row.validityFailedChecks ?? undefined,
   };
 }
 

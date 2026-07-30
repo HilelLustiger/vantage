@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { DocumentStatus } from "@vantage/shared-types";
+import type { DocumentStatus, ValidityCheckResult } from "@vantage/shared-types";
 import { db } from "../shared/db/client.js";
 import { documents } from "../shared/db/schema.js";
 import { findDocumentById } from "../shared/db/documents.js";
@@ -104,6 +104,36 @@ export async function transitionDocumentToNeedsReview(
   const [updated] = await db
     .update(documents)
     .set({ status: "needs_review", resolvedHoldings: resolvedAssetIds })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return updated;
+}
+
+// The parser service itself flagged this Document for review (ADR-0026) —
+// either ExtractionEngine's completeness gate found a required field/table
+// missing, or an institution's reconcile() found a check that didn't
+// match. A distinct path from transitionDocumentToNeedsReview above (which
+// is ADR-0010's asset-resolution case, reached only after a fully
+// successful parse): this one fires instead of ever reaching asset
+// resolution at all. values are the raw extracted data (same shape
+// storeParsedData would have stashed on success) — carried forward for a
+// future manual-correction form (not designed yet) to show the user.
+export async function transitionDocumentToNeedsReviewForValidityFailure(
+  documentId: string,
+  values: unknown,
+  failedChecks: ValidityCheckResult[],
+) {
+  const document = await findDocumentById(documentId);
+  if (!document) {
+    throw new Error(`Document ${documentId} not found`);
+  }
+  if (!TRANSITIONS[document.status].includes("needs_review")) {
+    throw new IllegalDocumentTransitionError(document.status, "needs_review");
+  }
+
+  const [updated] = await db
+    .update(documents)
+    .set({ status: "needs_review", parsedData: values, validityFailedChecks: failedChecks })
     .where(eq(documents.id, documentId))
     .returning();
   return updated;

@@ -231,4 +231,27 @@ describe("ingest.startImport", () => {
     expect(final?.status).toBe("failed");
     expect(final?.failureReason).toBe("no matching parser (unrecognized institution)");
   });
+
+  it("transitions to needs_review, not failed, when the parser itself flags a validity failure", async () => {
+    // ADR-0026: distinct from the asset-resolution needs_review path above
+    // — this one fires before asset resolution ever runs.
+    vi.mocked(parseDocument).mockResolvedValueOnce({
+      ok: false,
+      needsReview: true,
+      values: { endingBalance: null },
+      failedChecks: [{ name: "endingBalance", computed: null, claimed: null, matched: false }],
+    });
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await ingest.startImport(document.id);
+
+    const final = await findDocumentById(document.id);
+    expect(final?.status).toBe("needs_review");
+    expect(final?.validityFailedChecks).toEqual([
+      { name: "endingBalance", computed: null, claimed: null, matched: false },
+    ]);
+    const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
+    expect(row.parsedData).toEqual({ endingBalance: null });
+  });
 });

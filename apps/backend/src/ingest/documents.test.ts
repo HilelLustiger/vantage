@@ -13,6 +13,7 @@ import {
   storeResolvedHoldings,
   transitionDocument,
   transitionDocumentToNeedsReview,
+  transitionDocumentToNeedsReviewForValidityFailure,
   transitionDocumentWithFailure,
 } from "./documents.js";
 
@@ -148,5 +149,35 @@ describe("transitionDocumentToNeedsReview", () => {
     await expect(transitionDocumentToNeedsReview(document.id, [null])).rejects.toThrow(
       IllegalDocumentTransitionError,
     );
+  });
+});
+
+describe("transitionDocumentToNeedsReviewForValidityFailure", () => {
+  it("transitions to needs_review and records the raw values + failed checks", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+    await transitionDocument(document.id, "processing");
+
+    const updated = await transitionDocumentToNeedsReviewForValidityFailure(
+      document.id,
+      { endingBalance: null },
+      [{ name: "endingBalance", computed: null, claimed: null, matched: false }],
+    );
+
+    expect(updated.status).toBe("needs_review");
+    const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
+    expect(row.parsedData).toEqual({ endingBalance: null });
+    expect(row.validityFailedChecks).toEqual([
+      { name: "endingBalance", computed: null, claimed: null, matched: false },
+    ]);
+  });
+
+  it("rejects a transition not in the graph", async () => {
+    const account = await createTestAccount();
+    const document = await insertDocument({ accountId: account.id, checksum: randomUUID() });
+
+    await expect(
+      transitionDocumentToNeedsReviewForValidityFailure(document.id, {}, []),
+    ).rejects.toThrow(IllegalDocumentTransitionError);
   });
 });
