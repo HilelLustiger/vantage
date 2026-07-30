@@ -25,6 +25,7 @@ jobs:
     env:
       DATABASE_URL: postgres://test:test@localhost:5432/test
       SESSION_SECRET: ci-only-secret
+      TAX_RATE: "0.25"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
