@@ -94,7 +94,10 @@ def _resolve_sections(
     # (confirmed on Excellence's samples: a mediabox/content mismatch in the
     # source PDF puts every line's top/bottom outside page.bbox entirely).
     # The bottom-most extracted line is accurate regardless of that mismatch.
-    page_bottom = max((line["bottom"] for line in lines), default=page.height)
+    # page.height is only touched as a last resort (no lines at all) — a
+    # FieldSpec-only template's page stand-in (see conftest.py's
+    # _FakeTextOnlyPage) has no reason to implement it otherwise.
+    page_bottom = max(line["bottom"] for line in lines) if lines else page.height
 
     crops: dict[str, Page | None] = {}
     for i, section in enumerate(sections):

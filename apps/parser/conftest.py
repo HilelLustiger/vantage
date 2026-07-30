@@ -9,6 +9,7 @@ import io
 
 import pdfplumber
 import pytest
+from bidi.algorithm import get_display
 from reportlab.pdfgen import canvas
 
 _PAGE_SIZE = (600, 800)
@@ -47,3 +48,33 @@ def build_page():
 
     for pdf in opened:
         pdf.close()
+
+
+class _FakeTextOnlyPage:
+    """A minimal stand-in for pdfplumber.page.Page, sufficient for
+    templates that only ever call extract_text_lines() — i.e. any
+    template with no SectionSpec/TableSpec (Gemel today; the general
+    rule in ADR-0026 means this covers every FieldSpec-only template).
+    Lines are pre-reversed via get_display() so ExtractionEngine's own
+    fix_rtl() call (which un-reverses pdfplumber's real visual-order
+    output) turns them back into normal, readable text — the same
+    round-trip real PDFs go through, without needing a Hebrew-capable
+    font or real PDF generation (confirmed empirically against every
+    fixture line used against it)."""
+
+    def __init__(self, lines: list[str]):
+        self._lines = lines
+
+    def extract_text_lines(self):
+        return [
+            {"text": get_display(line), "top": i * 20.0, "bottom": i * 20.0 + 15}
+            for i, line in enumerate(self._lines)
+        ]
+
+
+@pytest.fixture
+def text_only_page():
+    def _build(lines: list[str]):
+        return _FakeTextOnlyPage(lines)
+
+    return _build

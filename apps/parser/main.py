@@ -39,18 +39,28 @@ async def parse(
     # the file's own content instead (parsers/registry.py).
     try:
         with pdfplumber.open(file.file) as pdf:
-            raw_text = ""
-            if pdf.pages:
-                raw_text = pdf.pages[0].extract_text() or ""
+            if not pdf.pages:
+                return ParseResponse(ok=False, reason="no matching parser (unrecognized institution)")
+            page = pdf.pages[0]
+            raw_text = page.extract_text() or ""
     except Exception:
         # A corrupt/unreadable upload should fail cleanly, same as any
         # other unrecognized input — never a bare 500 (ADR-0014's fail-loud
         # philosophy applies to "can't even read this," not just "don't
-        # recognize the institution").
+        # recognize the institution"). Deliberately narrow: only wraps
+        # opening/reading the file — a real bug in detect_and_extract below
+        # (e.g. a misconfigured template) must surface as itself, not get
+        # mislabeled as an unreadable file.
         return ParseResponse(ok=False, reason="could not read file as a PDF")
     text = fix_rtl(raw_text)
 
-    data = detect_and_extract(text, raw_text)
+    # page stays usable here even though `with` has exited — pdfplumber
+    # caches each page's parsed structures, no further file I/O needed
+    # (confirmed empirically). ExtractionEngine-backed entries (Gemel;
+    # #53-#55 next) need the live Page, not just text, for region-cropping/
+    # table extraction.
+    data = detect_and_extract(text, raw_text, page)
+
     if data is None:
         return ParseResponse(ok=False, reason="no matching parser (unrecognized institution)")
     if isinstance(data, ValidityFailure):

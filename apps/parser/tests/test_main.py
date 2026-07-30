@@ -9,8 +9,13 @@ client = TestClient(main.app)
 
 
 def _minimal_valid_pdf() -> bytes:
+    # A Canvas with nothing drawn on it produces zero pages once parsed —
+    # draw a single character so pdfplumber sees a real, if content-free,
+    # page (detect_and_extract needs one to even get called).
     buf = io.BytesIO()
-    canvas.Canvas(buf).save()
+    c = canvas.Canvas(buf)
+    c.drawString(0, 0, "x")
+    c.save()
     return buf.getvalue()
 
 
@@ -57,15 +62,14 @@ def test_parse_requires_a_file() -> None:
 
 
 def test_parse_reports_needs_review_on_validity_failure(monkeypatch) -> None:
-    # No real registry entry produces a ValidityFailure yet (ADR-0026's
-    # DocumentTemplate/ExtractionEngine isn't wired into any institution
-    # until #52-#55) — monkeypatching detect_and_extract exercises this
-    # response shape ahead of that, same synthetic-data spirit as #49.
+    # Monkeypatching detect_and_extract exercises this response shape
+    # directly, independent of which real registry entry (Gemel, since
+    # #52) happens to produce one — same synthetic-data spirit as #49.
     failure = ValidityFailure(
         values={"endingBalance": None},
         failed_checks=[ValidityResult("endingBalance", None, None, False)],
     )
-    monkeypatch.setattr(main, "detect_and_extract", lambda text, raw_text: failure)
+    monkeypatch.setattr(main, "detect_and_extract", lambda text, raw_text, page: failure)
 
     response = client.post(
         "/parse",

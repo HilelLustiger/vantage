@@ -5,14 +5,21 @@ def test_unrecognized_content_returns_none() -> None:
     assert detect_and_extract("nothing recognizable here", "nothing recognizable here") is None
 
 
-def test_dispatches_to_gemel_extractor_on_keyword_match() -> None:
-    text = "\n".join(
-        [
-            "מיטב גמל ופנסיה בע\"מ",
-            "יתרת הכספים בחשבון בסוף השנה 10,000",
-        ]
-    )
-    result = detect_and_extract(text, text)
+def test_dispatches_to_gemel_extractor_on_keyword_match(text_only_page) -> None:
+    # #52: Gemel dispatches through ExtractionEngine now, which needs a
+    # real page (extract_text_lines()), not just the matching text — every
+    # required GEMEL_TEMPLATE field needs a line here or this returns a
+    # ValidityFailure instead of the expected dict (see
+    # test_gemel_template.py for that path specifically).
+    lines = [
+        "מיטב גמל ופנסיה בע\"מ",
+        "תאריך הדוח: 31.12.2025",
+        "שם העמית: ישראל ישראלי מספר ת.ז: 123456789 מספר חשבון: 111-222-333",
+        "יתרת הכספים בחשבון בסוף השנה 10,000",
+        "בדיקה גמל להשקעה עוקב מדדי מניות 1.25% 0.91%",
+    ]
+    text = "\n".join(lines)
+    result = detect_and_extract(text, text, text_only_page(lines))
     assert result is not None
     assert result["institution"] == "מיטב גמל ופנסיה"
 

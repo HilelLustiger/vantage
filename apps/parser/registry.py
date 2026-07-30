@@ -12,9 +12,11 @@ from typing import Any, Callable, TypedDict
 
 from document_template import ValidityFailure
 from excellence import extract_excellence_securities
-from gemel import extract_gemel_statement
+from extraction_engine import extract as extract_via_engine
+from gemel_template import gemel_template
 from hapoalim import extract_hapoalim_securities
 from hapoalim_transactions import extract_hapoalim_transactions
+from pdfplumber.page import Page
 
 
 class _Entry(TypedDict):
@@ -22,33 +24,32 @@ class _Entry(TypedDict):
     document_type: str
     layout: str
     matches: Callable[[str, str], bool]
-    # dict | ValidityFailure widens ahead of any entry actually producing
-    # the latter — no hand-written extractor here does (ADR-0026's
-    # DocumentTemplate/ExtractionEngine can; #52-#55 are what replace these
-    # entries with one once each institution's real template exists).
-    extract: Callable[[str], "dict[str, Any] | ValidityFailure"]
+    # (text, page) — page is None only for callers (tests) that never reach
+    # an entry needing it; every hand-written extractor here ignores it
+    # (they only ever needed flattened text), only ADR-0026's
+    # ExtractionEngine-backed entries (Gemel now; #53-#55 next) use it, for
+    # the region-cropping/table extraction plain text can't support.
+    extract: Callable[[str, "Page | None"], "dict[str, Any] | ValidityFailure"]
 
 
 _ENTRIES: list[_Entry] = [
     {
         "institution": "מיטב גמל ופנסיה",
         "document_type": "pdf",
-        # Today's extractor handles yearly and quarterly text variants
-        # internally (fallback patterns), not as separate registry
-        # entries — "balance" reflects that this registry entry doesn't
-        # yet split by period. #52 may split this further once Gemel's
-        # real DocumentTemplate work happens (ADR-0025's own definition
-        # of Layout uses yearly-vs-quarterly-Gemel as its example).
+        # One DocumentTemplate handles both yearly and quarterly text
+        # variants internally (fallback FieldSpec patterns), same shape
+        # as gemel.py did — not split into two registry entries. "balance"
+        # reflects that; see #52's closing notes for why.
         "layout": "balance",
         "matches": lambda text, raw_text: "מיטב" in text[:400],
-        "extract": lambda text: extract_gemel_statement(text, "מיטב גמל ופנסיה"),
+        "extract": lambda text, page: extract_via_engine(page, gemel_template("מיטב גמל ופנסיה")),
     },
     {
         "institution": "הראל",
         "document_type": "pdf",
         "layout": "balance",
         "matches": lambda text, raw_text: "הראל" in text[:400],
-        "extract": lambda text: extract_gemel_statement(text, "הראל"),
+        "extract": lambda text, page: extract_via_engine(page, gemel_template("הראל")),
     },
     {
         "institution": "Bank Hapoalim",
@@ -57,7 +58,7 @@ _ENTRIES: list[_Entry] = [
         # ASCII URL, unaffected by RTL — checked against the pre-bidi-fix
         # raw text, not the display-corrected text used everywhere else.
         "matches": lambda text, raw_text: "bankhapoalim" in raw_text[:200],
-        "extract": extract_hapoalim_securities,
+        "extract": lambda text, page: extract_hapoalim_securities(text),
     },
     {
         # Same institution, a second recognized document shape — the
@@ -72,26 +73,32 @@ _ENTRIES: list[_Entry] = [
         "document_type": "pdf",
         "layout": "transactions",
         "matches": lambda text, raw_text: "current-account/transactions" in raw_text,
-        "extract": extract_hapoalim_transactions,
+        "extract": lambda text, page: extract_hapoalim_transactions(text),
     },
     {
         "institution": "אקסלנס",
         "document_type": "pdf",
         "layout": "balance",
         "matches": lambda text, raw_text: "אקסלנס" in text or "xnes.co.il" in raw_text,
-        "extract": extract_excellence_securities,
+        "extract": lambda text, page: extract_excellence_securities(text),
     },
 ]
 
 
-def detect_and_extract(text: str, raw_text: str) -> "dict[str, Any] | ValidityFailure | None":
+def detect_and_extract(
+    text: str, raw_text: str, page: "Page | None" = None
+) -> "dict[str, Any] | ValidityFailure | None":
     """text: bidi-fixed page text. raw_text: pdfplumber's unfixed output —
     needed for ASCII/URL signatures where bidi-fixing is a no-op anyway but
     keeping the distinction explicit avoids relying on that coincidence.
+    page: the live pdfplumber Page — only ExtractionEngine-backed entries
+    (Gemel; #53-#55 next) need it, for region-cropping/table extraction
+    plain text can't support. Optional/defaults to None only so tests that
+    never reach one of those entries don't need to fabricate a real page.
 
     Unrecognized (Institution, Document type, Layout) combinations return
     None — fail loudly, never a generic/heuristic fallback (ADR-0014)."""
     for entry in _ENTRIES:
         if entry["matches"](text, raw_text):
-            return entry["extract"](text)
+            return entry["extract"](text, page)
     return None
