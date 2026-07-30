@@ -47,3 +47,15 @@ _Avoid_: Dashboard (that's a UI surface, not this concept), Net worth (too narro
 **Ingest**:
 The internal process that turns a confirmed Document into Snapshots and Holdings — parsing, Asset resolution, and Snapshot/Holding creation.
 _Avoid_: Pipeline (CI/CD connotation), Processing (already a Document state)
+
+**Signature**:
+The combination of content/structure checks used to recognize what a Document actually is — composed from parameters like Institution, Document type, and Layout, built from small reusable checks against a document's own components (which fields/tables are present, what they contain) rather than one bespoke recognition function per case. Introduced by ADR-0021 for Institution-level detection; the parser-generalization work extends the same mechanism to Layout-level recognition. May extend to recognizing things beyond Documents in the future.
+_Avoid_: Detection pattern, Matcher
+
+**Document type**:
+The file encoding a Document arrives in — PDF or CSV today. One of the parameters a Signature is matched against, alongside Institution and Layout.
+_Avoid_: File format, Format
+
+**Layout**:
+The structural shape of a Document's content for a given Institution and Document type — which fields and tables are present, and how they're arranged (e.g. a yearly Gemel PDF vs a quarterly one). What ADR-0014's parser registry called "format" before this term split it from Document type. Formalized by ADR-0025.
+_Avoid_: Format, Report variant, Template
