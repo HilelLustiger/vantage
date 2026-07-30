@@ -194,11 +194,15 @@ def _data_rows(rows: list[list[str]], header_index: int) -> list[list[str]]:
     """Rows immediately after the header, trimmed at the first row whose
     cell count doesn't match — the same rule for every table, not
     institution-specific knowledge, which is why it lives here rather than
-    as a per-template locate() callable."""
+    as a per-template locate() callable. A row that's the right width but
+    entirely blank cells (a spacer row text-strategy table detection can
+    introduce between real rows) is skipped, not counted as data or as an
+    end-of-table signal — it carries no data by definition either way."""
     width = len(rows[header_index])
     data_rows: list[list[str]] = []
     for row in rows[header_index + 1 :]:
         if len(row) != width:
             break
-        data_rows.append(row)
+        if any(cell.strip() for cell in row):
+            data_rows.append(row)
     return data_rows
