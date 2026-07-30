@@ -38,6 +38,7 @@ every implementation detail gets one.
 | [0023](0023-per-asset-cash-flow-tracking-and-return-metrics.md) | Per-Asset cash-flow tracking and return metrics |
 | [0024](0024-ingesting-per-transaction-statement-formats.md) | Ingesting per-transaction statement formats |
 | [0025](0025-document-type-and-layout-split-from-format.md) | Split "format" into Document type and Layout |
+| [0026](0026-parser-generalization.md) | Parser generalization — declarative DocumentTemplate replaces per-institution modules |
 
 ## Open Questions
 
