@@ -1,5 +1,5 @@
 import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
-import type { Document } from "../../dto/index.js";
+import type { Document } from "../dto/index.js";
 import { db } from "./client.js";
 import { accountUsers, documents } from "./schema.js";
 

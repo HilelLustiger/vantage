@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { createAccountWithOwners } from "./db/accounts.js";
-import { createAsset } from "./db/assets.js";
-import { insertDocument } from "./db/documents.js";
-import { createInstitution } from "./db/institutions.js";
-import { createUser } from "./db/users.js";
+import { createAccountWithOwners } from "../db/accounts.js";
+import { createAsset } from "../db/assets.js";
+import { insertDocument } from "../db/documents.js";
+import { createInstitution } from "../db/institutions.js";
+import { createUser } from "../db/users.js";
 import { transitionDocument } from "../ingest/documents.js";
 import { commitSnapshot } from "../ingest/snapshotCreation.js";
 import { computePortfolioByAsset } from "./portfolioByAsset.js";

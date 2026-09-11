@@ -5,9 +5,9 @@ import {
   createAccountWithOwners,
   findAccountVisibleToUser,
   listAccountsForUser,
-} from "../shared/db/accounts.js";
-import { findInstitutionById } from "../shared/db/institutions.js";
-import { findUserById } from "../shared/db/users.js";
+} from "../db/accounts.js";
+import { findInstitutionById } from "../db/institutions.js";
+import { findUserById } from "../db/users.js";
 import { requireAuth } from "./requireAuth.js";
 
 const createAccountSchema = z.object({

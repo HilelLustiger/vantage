@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAsset } from "../shared/db/assets.js";
+import { createAsset } from "../db/assets.js";
 import { resolveAssets } from "./assetResolution.js";
 
 describe("resolveAssets", () => {

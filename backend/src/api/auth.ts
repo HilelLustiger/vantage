@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { User } from "../dto/index.js";
-import { findUserByEmail, findUserById } from "../shared/db/users.js";
+import { findUserByEmail, findUserById } from "../db/users.js";
 import { verifyPassword } from "./password.js";
 import { requireAuth } from "./requireAuth.js";
 

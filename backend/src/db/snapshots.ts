@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
-import type { Snapshot } from "../../dto/index.js";
+import type { Snapshot } from "../dto/index.js";
 import { db } from "./client.js";
 import { accountUsers, snapshots } from "./schema.js";
 

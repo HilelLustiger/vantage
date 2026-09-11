@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { User } from "../dto/index.js";
-import { listUsers } from "../shared/db/users.js";
+import { listUsers } from "../db/users.js";
 import { requireAuth } from "./requireAuth.js";
 
 export const usersRouter = Router();

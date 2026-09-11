@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import type { DocumentStatus, ValidityCheckResult } from "../dto/index.js";
-import { db } from "../shared/db/client.js";
-import { documents } from "../shared/db/schema.js";
-import { findDocumentById } from "../shared/db/documents.js";
+import { db } from "../db/client.js";
+import { documents } from "../db/schema.js";
+import { findDocumentById } from "../db/documents.js";
 
 // See docs/ADR/0011-document-lifecycle-separate-state-machine.md.
 const TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {

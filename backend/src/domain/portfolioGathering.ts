@@ -1,6 +1,6 @@
-import { getExchangeRate } from "./exchangeRates.js";
-import { listHoldingsForSnapshot } from "./db/holdings.js";
-import { findLatestActiveSnapshotsForUser } from "./db/snapshots.js";
+import { getExchangeRate } from "../infra/exchangeRates.js";
+import { listHoldingsForSnapshot } from "../db/holdings.js";
+import { findLatestActiveSnapshotsForUser } from "../db/snapshots.js";
 import type { ConvertedHolding } from "./portfolioAggregation.js";
 
 // Shared by GET /api/portfolio and GET /api/portfolio/currency-breakdown —

@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAccountWithOwners } from "../shared/db/accounts.js";
-import { createAsset, findAssetsByTicker } from "../shared/db/assets.js";
-import { findCashFlowsForAsset } from "../shared/db/cashFlows.js";
-import { findDocumentById, insertDocument } from "../shared/db/documents.js";
-import { createInstitution } from "../shared/db/institutions.js";
-import { createUser } from "../shared/db/users.js";
+import { createAccountWithOwners } from "../db/accounts.js";
+import { createAsset, findAssetsByTicker } from "../db/assets.js";
+import { findCashFlowsForAsset } from "../db/cashFlows.js";
+import { findDocumentById, insertDocument } from "../db/documents.js";
+import { createInstitution } from "../db/institutions.js";
+import { createUser } from "../db/users.js";
 import { applyResolutions, buildReviewLines } from "./assetReviewFlow.js";
 import { transitionDocument, transitionDocumentToNeedsReview } from "./documents.js";
 

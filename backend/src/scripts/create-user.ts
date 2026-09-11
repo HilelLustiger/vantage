@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { parseArgs } from "node:util";
 import { hashPassword } from "../api/password.js";
-import { createUser } from "../shared/db/users.js";
-import { pool } from "../shared/db/client.js";
+import { createUser } from "../db/users.js";
+import { pool } from "../db/client.js";
 
 // The only way a User is ever created — no signup endpoint exists. See ADR 0019.
 async function main() {

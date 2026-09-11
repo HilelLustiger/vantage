@@ -1,11 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { Institution } from "../dto/index.js";
-import {
-  createInstitution,
-  findInstitutionById,
-  listInstitutions,
-} from "../shared/db/institutions.js";
+import { createInstitution, findInstitutionById, listInstitutions } from "../db/institutions.js";
 import { requireAuth } from "./requireAuth.js";
 
 const createInstitutionSchema = z.object({

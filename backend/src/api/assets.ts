@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { Asset } from "../dto/index.js";
-import { createAsset, findAssetById, listAssets } from "../shared/db/assets.js";
+import { createAsset, findAssetById, listAssets } from "../db/assets.js";
 import { requireAuth } from "./requireAuth.js";
 
 const createAssetSchema = z.object({

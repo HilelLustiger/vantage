@@ -6,11 +6,11 @@ import type {
   PortfolioByAsset,
   PortfolioHistory,
 } from "../dto/index.js";
-import { aggregateByCurrency, aggregateHoldings } from "../shared/portfolioAggregation.js";
-import { gatherLatestConvertedHoldings } from "../shared/portfolioGathering.js";
-import { computePortfolioByAsset } from "../shared/portfolioByAsset.js";
-import { computePortfolioHistory } from "../shared/portfolioHistory.js";
-import { computeAssetCostBasisMetrics } from "../shared/assetCostBasis.js";
+import { aggregateByCurrency, aggregateHoldings } from "../domain/portfolioAggregation.js";
+import { gatherLatestConvertedHoldings } from "../domain/portfolioGathering.js";
+import { computePortfolioByAsset } from "../domain/portfolioByAsset.js";
+import { computePortfolioHistory } from "../domain/portfolioHistory.js";
+import { computeAssetCostBasisMetrics } from "../domain/assetCostBasis.js";
 import { requireAuth } from "./requireAuth.js";
 
 const querySchema = z.object({

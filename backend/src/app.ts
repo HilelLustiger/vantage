@@ -1,5 +1,5 @@
 import express from "express";
-import { sessionMiddleware } from "./shared/session.js";
+import { sessionMiddleware } from "./infra/session.js";
 import { authRouter } from "./api/auth.js";
 import { institutionsRouter } from "./api/institutions.js";
 import { accountsRouter } from "./api/accounts.js";

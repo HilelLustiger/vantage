@@ -1,7 +1,7 @@
 import type { PortfolioHistoryPoint, Snapshot } from "../dto/index.js";
-import { getExchangeRate } from "./exchangeRates.js";
-import { listHoldingsForSnapshot } from "./db/holdings.js";
-import { listSnapshotsForUser } from "./db/snapshots.js";
+import { getExchangeRate } from "../infra/exchangeRates.js";
+import { listHoldingsForSnapshot } from "../db/holdings.js";
+import { listSnapshotsForUser } from "../db/snapshots.js";
 
 // Net worth over time — see ADR-0022 (the aggregate, single-reference-
 // currency side of that decision). One point per distinct Snapshot

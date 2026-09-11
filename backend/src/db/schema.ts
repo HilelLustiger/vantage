@@ -17,7 +17,7 @@ import type {
   DocumentFormat,
   DocumentStatus,
   ValidityCheckResult,
-} from "../../dto/index.js";
+} from "../dto/index.js";
 
 export const users = pgTable("users", {
   id: text("id")

@@ -8,8 +8,8 @@ import { hashPassword } from "@vantage/backend/password";
 // The fake parser stand-in (vitest.setup.ts) always reports zero holdings,
 // so this suite covers the router's own job — visibility scoping across
 // accounts, response shape, auth — not the currency math itself. That's
-// covered directly by shared/portfolioAggregation.test.ts and
-// shared/exchangeRates.test.ts in backend.
+// covered directly by domain/portfolioAggregation.test.ts and
+// infra/exchangeRates.test.ts in backend.
 const PDF_BYTES = Buffer.from("%PDF-1.4\n%%EOF");
 
 async function loginAsNewUser(app: ReturnType<typeof createApp>) {

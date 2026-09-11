@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { Holding } from "../../dto/index.js";
+import type { Holding } from "../dto/index.js";
 import { db } from "./client.js";
 import { holdings } from "./schema.js";
 

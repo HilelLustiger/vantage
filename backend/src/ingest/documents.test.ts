@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { createAccountWithOwners } from "../shared/db/accounts.js";
-import { db } from "../shared/db/client.js";
-import { insertDocument } from "../shared/db/documents.js";
-import { createInstitution } from "../shared/db/institutions.js";
-import { documents } from "../shared/db/schema.js";
-import { createUser } from "../shared/db/users.js";
+import { createAccountWithOwners } from "../db/accounts.js";
+import { db } from "../db/client.js";
+import { insertDocument } from "../db/documents.js";
+import { createInstitution } from "../db/institutions.js";
+import { documents } from "../db/schema.js";
+import { createUser } from "../db/users.js";
 import {
   IllegalDocumentTransitionError,
   storeParsedData,

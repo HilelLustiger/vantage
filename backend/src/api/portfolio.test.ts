@@ -3,11 +3,11 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
 import { hashPassword } from "./password.js";
-import { createAccountWithOwners } from "../shared/db/accounts.js";
-import { createAsset } from "../shared/db/assets.js";
-import { createInstitution } from "../shared/db/institutions.js";
-import { createUser } from "../shared/db/users.js";
-import { insertDocument } from "../shared/db/documents.js";
+import { createAccountWithOwners } from "../db/accounts.js";
+import { createAsset } from "../db/assets.js";
+import { createInstitution } from "../db/institutions.js";
+import { createUser } from "../db/users.js";
+import { insertDocument } from "../db/documents.js";
 import { transitionDocument } from "../ingest/documents.js";
 import { commitSnapshot } from "../ingest/snapshotCreation.js";
 

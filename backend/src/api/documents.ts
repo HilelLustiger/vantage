@@ -3,15 +3,15 @@ import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
 import type { Document, DocumentReview } from "../dto/index.js";
-import { findAccountVisibleToUser } from "../shared/db/accounts.js";
+import { findAccountVisibleToUser } from "../db/accounts.js";
 import {
   findDocumentById,
   findDocumentVisibleToUser,
   findNeedsReviewDetailVisibleToUser,
   insertDocument,
   listDocumentsForUser,
-} from "../shared/db/documents.js";
-import { saveDocumentFile } from "../shared/storage.js";
+} from "../db/documents.js";
+import { saveDocumentFile } from "../infra/storage.js";
 import { applyResolutions, buildReviewLines } from "../ingest/assetReviewFlow.js";
 import { transitionDocumentWithFailure } from "../ingest/documents.js";
 import { ingest } from "../ingest/index.js";

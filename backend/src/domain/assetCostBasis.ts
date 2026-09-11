@@ -2,7 +2,7 @@
 // ADR-0023 and #40/#41/#42. Pure computation module: no API route yet
 // (#43 wires this bundle into an endpoint).
 import type { CashFlow, CostBasisSource } from "../dto/index.js";
-import { findCashFlowsForAsset } from "./db/cashFlows.js";
+import { findCashFlowsForAsset } from "../db/cashFlows.js";
 import { gatherLatestHoldingsForUser } from "./portfolioByAsset.js";
 import { computeXirr } from "./xirr.js";
 

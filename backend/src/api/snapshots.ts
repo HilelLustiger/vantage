@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Holding, Snapshot } from "../dto/index.js";
-import { listHoldingsForSnapshot } from "../shared/db/holdings.js";
-import { findSnapshotVisibleToUser, listSnapshotsForUser } from "../shared/db/snapshots.js";
+import { listHoldingsForSnapshot } from "../db/holdings.js";
+import { findSnapshotVisibleToUser, listSnapshotsForUser } from "../db/snapshots.js";
 import { requireAuth } from "./requireAuth.js";
 
 // Read-only — Snapshots/Holdings are only ever created by the ingest

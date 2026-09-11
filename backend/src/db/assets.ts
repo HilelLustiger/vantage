@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { Asset, AssetType } from "../../dto/index.js";
+import type { Asset, AssetType } from "../dto/index.js";
 import { db } from "./client.js";
 import { assets } from "./schema.js";
 

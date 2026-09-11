@@ -4,8 +4,8 @@
 // not whatever nearby trading day Frankfurter substitutes internally, so
 // repeated lookups for the same date stay predictable and hit the cache.
 import { and, eq } from "drizzle-orm";
-import { db } from "./db/client.js";
-import { fxRates } from "./db/schema.js";
+import { db } from "../db/client.js";
+import { fxRates } from "../db/schema.js";
 
 export async function getExchangeRate(date: string, from: string, to: string): Promise<number> {
   if (from === to) return 1;

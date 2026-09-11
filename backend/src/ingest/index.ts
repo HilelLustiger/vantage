@@ -1,6 +1,6 @@
 // The api <-> ingest contract — see ADR 0002 and ADR 0003.
-import { findActiveDuplicate, findDocumentById } from "../shared/db/documents.js";
-import { readDocumentFile } from "../shared/storage.js";
+import { findActiveDuplicate, findDocumentById } from "../db/documents.js";
+import { readDocumentFile } from "../infra/storage.js";
 import { resolveAssets } from "./assetResolution.js";
 import {
   storeParsedData,

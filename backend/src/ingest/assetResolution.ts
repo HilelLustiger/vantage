@@ -5,11 +5,7 @@
 // lands in needs_review otherwise; see #20 for the original rationale and
 // #35 for the securityNumber extension.
 import { z } from "zod";
-import {
-  findAssetsByIsin,
-  findAssetsBySecurityNumber,
-  findAssetsByTicker,
-} from "../shared/db/assets.js";
+import { findAssetsByIsin, findAssetsBySecurityNumber, findAssetsByTicker } from "../db/assets.js";
 import { selectFlowTransactions } from "./cashFlowTransactions.js";
 
 // The one thing every extractor's output shares. .passthrough() lets

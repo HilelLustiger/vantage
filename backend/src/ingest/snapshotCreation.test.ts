@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAccountWithOwners } from "../shared/db/accounts.js";
-import { createAsset } from "../shared/db/assets.js";
-import { findCashFlowsForAsset } from "../shared/db/cashFlows.js";
-import { findDocumentById, insertDocument } from "../shared/db/documents.js";
-import { listHoldingsForSnapshot } from "../shared/db/holdings.js";
-import { createInstitution } from "../shared/db/institutions.js";
-import { findActiveSnapshot, findSnapshotById } from "../shared/db/snapshots.js";
-import { createUser } from "../shared/db/users.js";
+import { createAccountWithOwners } from "../db/accounts.js";
+import { createAsset } from "../db/assets.js";
+import { findCashFlowsForAsset } from "../db/cashFlows.js";
+import { findDocumentById, insertDocument } from "../db/documents.js";
+import { listHoldingsForSnapshot } from "../db/holdings.js";
+import { createInstitution } from "../db/institutions.js";
+import { findActiveSnapshot, findSnapshotById } from "../db/snapshots.js";
+import { createUser } from "../db/users.js";
 import { transitionDocument } from "./documents.js";
 import { commitSnapshot, parseStatementDate } from "./snapshotCreation.js";
 

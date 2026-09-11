@@ -5,7 +5,7 @@
 // commitSnapshot() #21 built, deliberately reusable for exactly this.
 import { z } from "zod";
 import type { DocumentReviewLine, DocumentResolution } from "../dto/index.js";
-import { createAsset, findAssetById } from "../shared/db/assets.js";
+import { createAsset, findAssetById } from "../db/assets.js";
 import { deriveFlowAmount, selectFlowTransactions } from "./cashFlowTransactions.js";
 import { commitSnapshot } from "./snapshotCreation.js";
 

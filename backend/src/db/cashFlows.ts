@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { CashFlow, CashFlowSource } from "../../dto/index.js";
+import type { CashFlow, CashFlowSource } from "../dto/index.js";
 import { db } from "./client.js";
 import { cashFlows } from "./schema.js";
 

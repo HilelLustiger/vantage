@@ -6,10 +6,10 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { CashFlowSource } from "../dto/index.js";
-import { db } from "../shared/db/client.js";
-import { listHoldingsForSnapshot } from "../shared/db/holdings.js";
-import { cashFlows, documents, holdings, snapshots } from "../shared/db/schema.js";
-import { findPreviousActiveSnapshot } from "../shared/db/snapshots.js";
+import { db } from "../db/client.js";
+import { listHoldingsForSnapshot } from "../db/holdings.js";
+import { cashFlows, documents, holdings, snapshots } from "../db/schema.js";
+import { findPreviousActiveSnapshot } from "../db/snapshots.js";
 import { deriveFlowAmount, selectFlowTransactions } from "./cashFlowTransactions.js";
 
 const parsedDataSchema = z
