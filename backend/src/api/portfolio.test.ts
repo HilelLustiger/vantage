@@ -76,6 +76,10 @@ describe("GET /api/portfolio/by-asset", () => {
               xirr: null,
               taxOnProfit: "90.12",
               netOfTax: "16629.88",
+              // TODO(#59): stubbed as "today, open" until real freshness/
+              // closed-position detection exists — see backend/src/api/portfolio.ts.
+              freshness: { kind: "document", asOfDate: expect.any(String), daysSinceStatement: 0 },
+              status: "open",
             },
           ],
         },

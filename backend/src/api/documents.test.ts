@@ -56,6 +56,7 @@ describe("GET /api/documents/:id/review", () => {
 
     expect(res.body).toEqual({
       documentId: document.id,
+      reason: "asset_resolution",
       lines: [
         {
           index: 0,

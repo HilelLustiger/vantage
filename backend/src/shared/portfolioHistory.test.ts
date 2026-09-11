@@ -72,9 +72,9 @@ describe("computePortfolioHistory", () => {
     const points = await computePortfolioHistory(user.id, "ILS");
 
     expect(points).toEqual([
-      { date: "2026-01-31", value: "100" },
+      { date: "2026-01-31", value: "100", costBasis: "0" },
       // Account A's Snapshot carries forward into this later event date.
-      { date: "2026-02-28", value: "150" },
+      { date: "2026-02-28", value: "150", costBasis: "0" },
     ]);
   });
 
@@ -109,8 +109,8 @@ describe("computePortfolioHistory", () => {
     const points = await computePortfolioHistory(user.id, "ILS");
 
     expect(points).toEqual([
-      { date: "2026-01-01", value: "300" }, // 100 USD * rate 3 (as of 2026-01-01)
-      { date: "2026-02-01", value: "400" }, // same USD holding, carried forward, rate 4 (as of 2026-02-01)
+      { date: "2026-01-01", value: "300", costBasis: "0" }, // 100 USD * rate 3 (as of 2026-01-01)
+      { date: "2026-02-01", value: "400", costBasis: "0" }, // same USD holding, carried forward, rate 4 (as of 2026-02-01)
     ]);
   });
 });
