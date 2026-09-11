@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AssetCurrencyValue } from "@vantage/backend/dto";
-import { AssetsPage } from "./AssetsPage";
+import { AssetsPage } from "../../pages/AssetsPage";
 
 const asset = { id: "asset-1", type: "stock", name: "Example Corp", ticker: "EX" };
 const unheldAsset = { id: "asset-2", type: "cash", name: "Unheld Fund" };
@@ -27,8 +27,10 @@ function currencyValue(overrides: Partial<AssetCurrencyValue> = {}): AssetCurren
     xirr: 0.1,
     taxOnProfit: "50",
     netOfTax: "950",
+    freshness: { kind: "live", updatedAt: "2026-01-01T00:00:00.000Z" },
+    status: "open",
     ...overrides,
-  };
+  } as AssetCurrencyValue;
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -51,6 +53,9 @@ function mockApi({
     }
     if (path === "/api/portfolio/by-asset" && method === "GET") {
       return jsonResponse({ userId: "u1", assets: byAsset });
+    }
+    if (path.match(/^\/api\/assets\/[^/]+\/history$/) && method === "GET") {
+      return jsonResponse({ assetId: "asset-1", currency: "ILS", points: [] });
     }
     throw new Error(`unexpected fetch: ${method} ${path}`);
   });

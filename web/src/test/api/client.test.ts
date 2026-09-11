@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiClient, ApiError } from "./apiClient";
+import { apiClient, ApiError } from "../../api/client";
 
 describe("apiClient", () => {
   afterEach(() => {

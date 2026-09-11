@@ -1,5 +1,5 @@
 import type { Institution } from "@vantage/backend/dto";
-import { apiClient } from "../apiClient";
+import { apiClient } from "./client";
 
 export const institutionsApi = {
   list: () => apiClient.get<Institution[]>("/api/institutions"),

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { Combobox } from "./Combobox";
+import { Combobox } from "../../components/Combobox";
 
 const options = [
   { id: "1", label: "Bank of Example" },

@@ -2,9 +2,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { LoginPage } from "./LoginPage";
-import { ApiError } from "../lib/apiClient";
-import * as AuthContext from "../lib/AuthContext";
+import { LoginPage } from "../../pages/LoginPage";
+import { ApiError } from "../../api/client";
+import * as AuthContext from "../../context/AuthContext";
 
 describe("LoginPage", () => {
   it("calls login with form values and shows the server's error on failure", async () => {

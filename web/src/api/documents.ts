@@ -1,8 +1,9 @@
 import type { Document, DocumentResolution, DocumentReview } from "@vantage/backend/dto";
-import { apiClient } from "../apiClient";
+import { apiClient } from "./client";
 
 export const documentsApi = {
   list: () => apiClient.get<Document[]>("/api/documents"),
+  get: (documentId: string) => apiClient.get<Document>(`/api/documents/${documentId}`),
   upload: (accountId: string, file: File) => {
     const formData = new FormData();
     formData.set("accountId", accountId);

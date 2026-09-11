@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DashboardPage } from "./DashboardPage";
+import { DashboardPage } from "../../pages/DashboardPage";
 
 const assets = [
   { id: "asset-1", type: "stock", name: "Existing Corp", ticker: "EX" },
@@ -15,6 +15,11 @@ const defaultPortfolio = {
     { assetId: "asset-1", quantity: "10", value: "800", currency: "ILS" },
     { assetId: "asset-2", quantity: "200", value: "200", currency: "ILS" },
   ],
+  costBasis: "700",
+  profit: "300",
+  simpleReturnPct: 42.9,
+  liveValue: "800",
+  documentValue: "200",
 };
 const defaultBreakdown = {
   userId: "u1",
@@ -23,8 +28,8 @@ const defaultBreakdown = {
 const defaultHistory = {
   userId: "u1",
   points: [
-    { date: "2026-01-01", value: "900" },
-    { date: "2026-02-01", value: "1000" },
+    { date: "2026-01-01", value: "900", costBasis: "700" },
+    { date: "2026-02-01", value: "1000", costBasis: "700" },
   ],
 };
 
@@ -103,7 +108,7 @@ describe("DashboardPage", () => {
     );
     expect(screen.getAllByText(/stock/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/cash/).length).toBeGreaterThan(0);
-    expect(screen.getByText("Currency breakdown")).toBeDefined();
+    expect(screen.getByText("By currency")).toBeDefined();
     expect(screen.getAllByText(/ILS/).length).toBeGreaterThan(0);
     expect(screen.getByText("Net worth over time")).toBeDefined();
   });
@@ -164,7 +169,7 @@ describe("DashboardPage", () => {
     );
     // The failing card shows its own error, without blanking the others.
     expect(screen.getByText("exchange rate lookup failed")).toBeDefined();
-    expect(screen.getByText("Currency breakdown")).toBeDefined();
+    expect(screen.getByText("By currency")).toBeDefined();
     expect(screen.queryByText(/No holdings yet/)).toBeNull();
   });
 });

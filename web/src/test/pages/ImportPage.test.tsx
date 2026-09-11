@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ImportPage } from "./ImportPage";
+import { ImportPage } from "../../pages/ImportPage";
 
 const account = { id: "acc-1", institutionId: "inst-1", name: "Brokerage", ownerUserIds: ["u1"] };
 

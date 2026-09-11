@@ -7,10 +7,10 @@ import { Card } from "../components/Card";
 import { Combobox, type ComboboxSelection } from "../components/Combobox";
 import { Modal } from "../components/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell } from "../components/Table";
-import { useAuth } from "../lib/AuthContext";
-import { accountsApi } from "../lib/api/accounts";
-import { institutionsApi } from "../lib/api/institutions";
-import { usersApi } from "../lib/api/users";
+import { useAuth } from "../context/AuthContext";
+import { accountsApi } from "../api/accounts";
+import { institutionsApi } from "../api/institutions";
+import { usersApi } from "../api/users";
 
 type HouseholdUser = { id: string; email: string };
 

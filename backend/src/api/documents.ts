@@ -118,7 +118,14 @@ documentsRouter.get("/:id/review", async (req, res) => {
     throw new Error(`Document ${req.params.id}'s parsed data no longer validates`);
   }
 
-  res.status(200).json({ documentId: req.params.id, lines } satisfies DocumentReview);
+  // See ADR-0008: a validity/completeness failure carries failed checks;
+  // the pre-existing asset-resolution path never does.
+  const reason: DocumentReview["reason"] =
+    detail.validityFailedChecks && detail.validityFailedChecks.length > 0
+      ? "validity_failure"
+      : "asset_resolution";
+
+  res.status(200).json({ documentId: req.params.id, reason, lines } satisfies DocumentReview);
 });
 
 documentsRouter.post("/:id/resolve", async (req, res) => {

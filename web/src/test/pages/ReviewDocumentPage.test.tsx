@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ReviewDocumentPage } from "./ReviewDocumentPage";
+import { ReviewDocumentPage } from "../../pages/ReviewDocumentPage";
 
 const documentId = "doc-1";
 const asset = { id: "asset-1", type: "stock", name: "Existing Corp", ticker: "EX" };

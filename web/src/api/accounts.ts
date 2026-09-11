@@ -1,5 +1,5 @@
 import type { Account } from "@vantage/backend/dto";
-import { apiClient } from "../apiClient";
+import { apiClient } from "./client";
 
 export const accountsApi = {
   list: () => apiClient.get<Account[]>("/api/accounts"),

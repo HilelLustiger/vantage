@@ -1,12 +1,12 @@
 import { Route, Routes } from "react-router-dom";
-import { ProtectedRoute } from "./routes/ProtectedRoute";
-import { LoginPage } from "./routes/LoginPage";
-import { Layout } from "./routes/Layout";
-import { DashboardPage } from "./routes/DashboardPage";
-import { AccountsPage } from "./routes/AccountsPage";
-import { AssetsPage } from "./routes/AssetsPage";
-import { ImportPage } from "./routes/ImportPage";
-import { ReviewDocumentPage } from "./routes/ReviewDocumentPage";
+import { ProtectedRoute } from "./routing/ProtectedRoute";
+import { LoginPage } from "./pages/LoginPage";
+import { Layout } from "./layouts/Layout";
+import { DashboardPage } from "./pages/DashboardPage";
+import { AccountsPage } from "./pages/AccountsPage";
+import { AssetsPage } from "./pages/AssetsPage";
+import { ImportPage } from "./pages/ImportPage";
+import { ReviewDocumentPage } from "./pages/ReviewDocumentPage";
 
 export function App() {
   return (

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Landmark, PieChart, Upload, ArrowLeftRight, LogOut } from "lucide-react";
-import { useAuth } from "../lib/AuthContext";
+import { LayoutDashboard, Landmark, PieChart, Upload, LogOut } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -34,16 +34,6 @@ export function Layout() {
               {label}
             </NavLink>
           ))}
-          <div
-            aria-disabled="true"
-            className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-gray-400"
-          >
-            <ArrowLeftRight size={18} />
-            Transactions
-            <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-normal text-gray-400">
-              Coming soon
-            </span>
-          </div>
         </nav>
         <div className="mt-6 border-t border-gray-200 pt-4">
           <p className="truncate px-2 text-sm text-gray-600">{user?.email}</p>

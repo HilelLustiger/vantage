@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { ProtectedRoute } from "./ProtectedRoute";
-import * as AuthContext from "../lib/AuthContext";
+import { ProtectedRoute } from "../../routing/ProtectedRoute";
+import * as AuthContext from "../../context/AuthContext";
 
 function renderAt(path: string) {
   return render(

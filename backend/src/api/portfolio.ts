@@ -33,7 +33,20 @@ portfolioRouter.get("/", async (req, res) => {
   try {
     const converted = await gatherLatestConvertedHoldings(userId, displayCurrency);
     const lines = aggregateHoldings(converted, displayCurrency);
-    res.status(200).json({ userId, lines } satisfies Portfolio);
+    // TODO(#59): real portfolio-level cost basis/profit (aggregate
+    // computeAssetCostBasisMetrics, converted to displayCurrency) and a
+    // real live/document split once valuationKind/live pricing exist —
+    // everything is treated as document-based for now.
+    const total = lines.reduce((sum, line) => sum + Number(line.value), 0);
+    res.status(200).json({
+      userId,
+      lines,
+      costBasis: "0",
+      profit: "0",
+      simpleReturnPct: null,
+      liveValue: "0",
+      documentValue: String(total),
+    } satisfies Portfolio);
   } catch (err) {
     // Exchange-rate lookup failed (Frankfurter unreachable, or no rate for
     // a needed date/pair) — a Portfolio total that silently excluded money
@@ -93,6 +106,13 @@ portfolioRouter.get("/by-asset", async (req, res) => {
   ]);
   const metricsByKey = new Map(costBasisMetrics.map((m) => [`${m.assetId} ${m.currency}`, m]));
 
+  // TODO(#59): real per-currency freshness (live-priced vs. the Holding's
+  // own Snapshot asOfDate) and closed-position detection/realized metrics
+  // once valuationKind/live pricing and the cash_flows-vs-current-holdings
+  // walk exist — every entry is reported as an open, just-reviewed
+  // document-priced Holding for now.
+  const today = new Date().toISOString().slice(0, 10);
+
   const assets = holdingsByAsset.map((breakdown) => ({
     ...breakdown,
     valuesByCurrency: breakdown.valuesByCurrency.map((v) => {
@@ -109,6 +129,8 @@ portfolioRouter.get("/by-asset", async (req, res) => {
         xirr: metrics.xirr,
         taxOnProfit: metrics.taxOnProfit,
         netOfTax: metrics.netOfTax,
+        freshness: { kind: "document" as const, asOfDate: today, daysSinceStatement: 0 },
+        status: "open" as const,
       };
     }),
   }));

@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AccountsPage } from "./AccountsPage";
-import * as AuthContext from "../lib/AuthContext";
+import { AccountsPage } from "../../pages/AccountsPage";
+import * as AuthContext from "../../context/AuthContext";
 
 const institution = { id: "inst-1", name: "Existing Bank" };
 const account = {

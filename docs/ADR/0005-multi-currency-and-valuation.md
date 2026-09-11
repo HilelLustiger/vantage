@@ -110,9 +110,6 @@ granularity.
 - `Holding`/`Asset` need a valuation-kind field and a live/stale distinction
   that the read path (aggregation, per-Asset breakdown) accounts for. The
   market-data provider choice is still open (see the ADR index).
-- Dashboard and Assets mockups from this refactor's design pass are the
-  reference for how currency breakdown, sector/geography exposure, and
-  live/stale freshness are actually surfaced together.
 - Worth double-checking at implementation (not reopening now): a
   foreign-listed live-priced stock's currency should already be covered by
   "store original, convert at read" without further change.

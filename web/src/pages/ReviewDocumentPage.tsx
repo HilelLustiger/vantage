@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { FileWarning } from "lucide-react";
 import type {
   Asset,
   AssetType,
@@ -7,14 +8,15 @@ import type {
   DocumentResolution,
   DocumentReview,
   DocumentReviewLine,
+  ValidityCheckResult,
 } from "@vantage/backend/dto";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Combobox, type ComboboxSelection } from "../components/Combobox";
-import { assetsApi } from "../lib/api/assets";
-import { documentsApi } from "../lib/api/documents";
-import { ApiError } from "../lib/apiClient";
+import { assetsApi } from "../api/assets";
+import { documentsApi } from "../api/documents";
+import { ApiError } from "../api/client";
 
 const ASSET_TYPES: AssetType[] = ["stock", "etf", "mutual_fund", "bond", "cash"];
 
@@ -27,6 +29,7 @@ export function ReviewDocumentPage() {
   const { documentId } = useParams<{ documentId: string }>();
   const navigate = useNavigate();
   const [review, setReview] = useState<DocumentReview | null>(null);
+  const [failedChecks, setFailedChecks] = useState<ValidityCheckResult[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [lineStates, setLineStates] = useState<Record<number, LineState>>({});
@@ -37,9 +40,15 @@ export function ReviewDocumentPage() {
   useEffect(() => {
     if (!documentId) return;
     Promise.all([documentsApi.review(documentId), assetsApi.list()])
-      .then(([reviewResult, assetList]) => {
+      .then(async ([reviewResult, assetList]) => {
         setReview(reviewResult);
         setAssets(assetList);
+        // The validity-failure variant additionally shows which checks
+        // failed — only the Document itself carries that (ADR 0008).
+        if (reviewResult.reason === "validity_failure") {
+          const document = await documentsApi.get(documentId);
+          setFailedChecks(document.validityFailedChecks ?? []);
+        }
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 404) {
@@ -135,7 +144,30 @@ export function ReviewDocumentPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-lg font-semibold text-gray-900">Review statement lines</h1>
+      <h1 className="mb-4 text-lg font-semibold text-gray-900">Review statement lines</h1>
+
+      {review.reason === "validity_failure" && (
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3.5">
+          <FileWarning size={18} className="mt-0.5 shrink-0 text-amber-600" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Some values didn't check out</p>
+            <p className="mt-1 text-sm leading-relaxed text-amber-800">
+              The numbers below didn't match what the statement itself claims — confirm or correct
+              them before committing.
+            </p>
+            {failedChecks.length > 0 && (
+              <ul className="mt-2 space-y-0.5 text-xs text-amber-700">
+                {failedChecks.map((check) => (
+                  <li key={check.name}>
+                    {check.name}: computed {check.computed ?? "—"}, statement claims{" "}
+                    {check.claimed ?? "—"}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {review.lines.map((line) =>

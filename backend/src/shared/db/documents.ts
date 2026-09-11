@@ -101,5 +101,6 @@ export async function findNeedsReviewDetailVisibleToUser(documentId: string, use
     accountId: row.document.accountId,
     parsedData: row.document.parsedData,
     resolvedHoldings: row.document.resolvedHoldings as (string | null)[] | null,
+    validityFailedChecks: row.document.validityFailedChecks,
   };
 }

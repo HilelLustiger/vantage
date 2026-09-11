@@ -55,7 +55,11 @@ export async function computePortfolioHistory(
         total += Number(holding.value) * rate;
       }
     }
-    points.push({ date, value: String(total) });
+    // TODO(#59): a real cost-basis-over-time series from cash_flows running
+    // totals, converted to displayCurrency the same way `value` is above —
+    // stubbed at "0" for now so the response shape matches ADR-0006 ahead
+    // of that.
+    points.push({ date, value: String(total), costBasis: "0" });
   }
   return points;
 }

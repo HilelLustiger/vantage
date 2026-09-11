@@ -4,7 +4,7 @@ import type {
   PortfolioByAsset,
   PortfolioHistory,
 } from "@vantage/backend/dto";
-import { apiClient } from "../apiClient";
+import { apiClient } from "./client";
 
 export const portfolioApi = {
   get: (currency: string) =>

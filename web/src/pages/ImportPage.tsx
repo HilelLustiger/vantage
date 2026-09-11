@@ -5,9 +5,9 @@ import type { Account, Document, DocumentStatus } from "@vantage/backend/dto";
 import { Badge } from "../components/Badge";
 import { Card } from "../components/Card";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell } from "../components/Table";
-import { accountsApi } from "../lib/api/accounts";
-import { documentsApi } from "../lib/api/documents";
-import { ApiError } from "../lib/apiClient";
+import { accountsApi } from "../api/accounts";
+import { documentsApi } from "../api/documents";
+import { ApiError } from "../api/client";
 
 const STATUS_STYLES: Record<DocumentStatus, string> = {
   uploaded: "bg-gray-100 text-gray-700",
