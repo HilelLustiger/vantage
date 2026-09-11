@@ -1,13 +1,13 @@
 import express from "express";
 import { sessionMiddleware } from "./infra/session.js";
-import { authRouter } from "./api/auth.js";
-import { institutionsRouter } from "./api/institutions.js";
-import { accountsRouter } from "./api/accounts.js";
-import { assetsRouter } from "./api/assets.js";
-import { documentsRouter } from "./api/documents.js";
-import { snapshotsRouter } from "./api/snapshots.js";
-import { portfolioRouter } from "./api/portfolio.js";
-import { usersRouter } from "./api/users.js";
+import { authRouter } from "./routes/auth.js";
+import { institutionsRouter } from "./routes/institutions.js";
+import { accountsRouter } from "./routes/accounts.js";
+import { assetsRouter } from "./routes/assets.js";
+import { documentsRouter } from "./routes/documents.js";
+import { snapshotsRouter } from "./routes/snapshots.js";
+import { portfolioRouter } from "./routes/portfolio.js";
+import { usersRouter } from "./routes/users.js";
 
 export function createApp() {
   const app = express();

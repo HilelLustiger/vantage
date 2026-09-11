@@ -7,8 +7,8 @@ import { insertDocument } from "../../db/documents.js";
 import { createInstitution } from "../../db/institutions.js";
 import { documents } from "../../db/schema.js";
 import { createUser } from "../../db/users.js";
+import { IllegalDocumentTransitionError } from "../../entities/Document.js";
 import {
-  IllegalDocumentTransitionError,
   storeParsedData,
   storeResolvedHoldings,
   transitionDocument,
@@ -137,7 +137,8 @@ describe("transitionDocumentToNeedsReview", () => {
     const updated = await transitionDocumentToNeedsReview(document.id, [null]);
 
     expect(updated.status).toBe("needs_review");
-    expect(updated.resolvedHoldings).toEqual([null]);
+    const [row] = await db.select().from(documents).where(eq(documents.id, document.id));
+    expect(row.resolvedHoldings).toEqual([null]);
   });
 
   it("rejects a transition not in the graph", async () => {

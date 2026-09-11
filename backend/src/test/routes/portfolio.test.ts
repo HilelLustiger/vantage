@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../../app.js";
-import { hashPassword } from "../../api/password.js";
+import { hashPassword } from "../../routes/password.js";
 import { createAccountWithOwners } from "../../db/accounts.js";
 import { createAsset } from "../../db/assets.js";
 import { createInstitution } from "../../db/institutions.js";

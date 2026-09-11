@@ -1,5 +1,5 @@
 import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
-import type { Document } from "../dto/index.js";
+import type { Document, DocumentStatus, ValidityCheckResult } from "../dto/index.js";
 import { db } from "./client.js";
 import { accountUsers, documents } from "./schema.js";
 
@@ -103,4 +103,72 @@ export async function findNeedsReviewDetailVisibleToUser(documentId: string, use
     resolvedHoldings: row.document.resolvedHoldings as (string | null)[] | null,
     validityFailedChecks: row.document.validityFailedChecks,
   };
+}
+
+// Pure persistence from here down — legality of the transition itself is
+// entities/Document.ts's job, asserted by the caller (ingest/documents.ts)
+// before any of these run.
+
+export async function updateDocumentStatus(documentId: string, status: DocumentStatus) {
+  const [updated] = await db
+    .update(documents)
+    .set({ status })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return toDocument(updated);
+}
+
+export async function updateDocumentFailure(documentId: string, reason: string) {
+  const [updated] = await db
+    .update(documents)
+    .set({ status: "failed", failureReason: reason })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return toDocument(updated);
+}
+
+export async function updateDocumentParsedData(documentId: string, data: unknown) {
+  const [updated] = await db
+    .update(documents)
+    .set({ parsedData: data })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return toDocument(updated);
+}
+
+export async function updateDocumentResolvedHoldings(
+  documentId: string,
+  resolvedAssetIds: (string | null)[],
+) {
+  const [updated] = await db
+    .update(documents)
+    .set({ resolvedHoldings: resolvedAssetIds })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return toDocument(updated);
+}
+
+export async function updateDocumentNeedsReview(
+  documentId: string,
+  resolvedAssetIds: (string | null)[],
+) {
+  const [updated] = await db
+    .update(documents)
+    .set({ status: "needs_review", resolvedHoldings: resolvedAssetIds })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return toDocument(updated);
+}
+
+export async function updateDocumentNeedsReviewForValidityFailure(
+  documentId: string,
+  values: unknown,
+  failedChecks: ValidityCheckResult[],
+) {
+  const [updated] = await db
+    .update(documents)
+    .set({ status: "needs_review", parsedData: values, validityFailedChecks: failedChecks })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return toDocument(updated);
 }

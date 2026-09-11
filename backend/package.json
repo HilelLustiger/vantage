@@ -7,7 +7,7 @@
     "./app": "./src/app.ts",
     "./db/users": "./src/db/users.ts",
     "./db/client": "./src/db/client.ts",
-    "./password": "./src/api/password.ts",
+    "./password": "./src/routes/password.ts",
     "./dto": "./src/dto/index.ts"
   },
   "scripts": {

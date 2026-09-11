@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashPassword, verifyPassword } from "../../api/password.js";
+import { hashPassword, verifyPassword } from "../../routes/password.js";
 
 describe("password hashing", () => {
   it("round-trips: a hashed password verifies against its original", async () => {
