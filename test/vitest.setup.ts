@@ -58,7 +58,7 @@ beforeAll(async () => {
 
   const testPool = new Pool({ connectionString: testUrl.toString() });
   await migrate(drizzle(testPool), {
-    migrationsFolder: path.resolve(process.cwd(), "../apps/backend/src/shared/db/migrations"),
+    migrationsFolder: path.resolve(process.cwd(), "../backend/src/shared/db/migrations"),
   });
   // Start every run from a clean slate — bounds disk/row growth on the test
   // database itself instead of just relocating the original problem.

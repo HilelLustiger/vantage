@@ -4,9 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "workspaces": [
-    "apps/web",
-    "apps/backend",
-    "packages/shared-types",
+    "web",
+    "backend",
     "test"
   ],
   "engines": {
@@ -18,6 +17,8 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.11",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
     "prettier": "^3.3.3",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.3.0"
@@ -29,5 +30,20 @@
     "esbuild@0.21.5": true,
     "bcrypt@5.1.1": true,
     "fsevents@2.3.3": true
+  },
+  "scripts": {
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "parser/**/*.py": [
+      "bash -c 'cd parser && ruff check --fix'"
+    ]
   }
 }

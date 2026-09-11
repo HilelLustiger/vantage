@@ -14,7 +14,7 @@ services:
       - .:/repo
       - node_modules:/repo/node_modules
     env_file: .env
-    command: sh -c "npm ci && npm run dev --workspace=apps/backend"
+    command: sh -c "npm ci && npm run dev --workspace=backend"
     ports:
       - "3001:3001"
     depends_on:
@@ -28,7 +28,7 @@ services:
       - node_modules:/repo/node_modules
     environment:
       BACKEND_INTERNAL_URL: http://backend:3001
-    command: sh -c "npm ci && npm run dev --workspace=apps/web -- --host 0.0.0.0"
+    command: sh -c "npm ci && npm run dev --workspace=web -- --host 0.0.0.0"
     ports:
       - "5173:5173"
     depends_on:
@@ -38,9 +38,9 @@ services:
     image: python:3.12-slim
     working_dir: /app
     volumes:
-      - ./apps/parser:/app
+      - ./parser:/app
     command: sh -c "pip install -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
-    # no ports: — reachable only by backend, over the compose network (ADR 0003)
+    # no ports: — reachable only by backend, over the compose network (ADR 0001)
 
 volumes:
   pgdata: {}

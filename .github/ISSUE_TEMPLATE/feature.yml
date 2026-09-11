@@ -1,0 +1,37 @@
+name: Feature
+description: New functionality
+labels: ["type:feature"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - web
+        - api
+        - ingest
+        - parser
+        - docs
+        - infra
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be built
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How do we know this is done?
+    validations:
+      required: false
+  - type: input
+    id: related-adr
+    attributes:
+      label: Related ADR (if any)
+      placeholder: "e.g. 0006"
+    validations:
+      required: false

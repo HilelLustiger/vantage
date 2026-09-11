@@ -9,7 +9,7 @@ import { hashPassword } from "@vantage/backend/password";
 // so this suite covers the router's own job — visibility scoping across
 // accounts, response shape, auth — not the currency math itself. That's
 // covered directly by shared/portfolioAggregation.test.ts and
-// shared/exchangeRates.test.ts in apps/backend.
+// shared/exchangeRates.test.ts in backend.
 const PDF_BYTES = Buffer.from("%PDF-1.4\n%%EOF");
 
 async function loginAsNewUser(app: ReturnType<typeof createApp>) {
