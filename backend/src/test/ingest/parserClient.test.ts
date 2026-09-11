@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseDocument } from "./parserClient.js";
+import { parseDocument } from "../../ingest/parserClient.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();

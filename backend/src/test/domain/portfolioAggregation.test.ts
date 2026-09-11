@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { aggregateByCurrency, aggregateHoldings } from "./portfolioAggregation.js";
+import { aggregateByCurrency, aggregateHoldings } from "../../domain/portfolioAggregation.js";
 
 describe("aggregateHoldings", () => {
   it("sums quantity and rate-converted value across accounts for the same asset", () => {

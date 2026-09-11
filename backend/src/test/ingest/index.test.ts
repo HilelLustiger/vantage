@@ -1,24 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
-import { createAccountWithOwners } from "../db/accounts.js";
-import { createAsset } from "../db/assets.js";
-import { findCashFlowsForAsset } from "../db/cashFlows.js";
-import { db } from "../db/client.js";
-import { findDocumentById, insertDocument } from "../db/documents.js";
-import { listHoldingsForSnapshot } from "../db/holdings.js";
-import { createInstitution } from "../db/institutions.js";
-import { documents } from "../db/schema.js";
-import { findActiveSnapshot } from "../db/snapshots.js";
-import { createUser } from "../db/users.js";
-import { transitionDocument } from "./documents.js";
-import { ingest } from "./index.js";
-import { parseDocument } from "./parserClient.js";
+import { createAccountWithOwners } from "../../db/accounts.js";
+import { createAsset } from "../../db/assets.js";
+import { findCashFlowsForAsset } from "../../db/cashFlows.js";
+import { db } from "../../db/client.js";
+import { findDocumentById, insertDocument } from "../../db/documents.js";
+import { listHoldingsForSnapshot } from "../../db/holdings.js";
+import { createInstitution } from "../../db/institutions.js";
+import { documents } from "../../db/schema.js";
+import { findActiveSnapshot } from "../../db/snapshots.js";
+import { createUser } from "../../db/users.js";
+import { transitionDocument } from "../../ingest/documents.js";
+import { ingest } from "../../ingest/index.js";
+import { parseDocument } from "../../ingest/parserClient.js";
 
-vi.mock("../infra/storage.js", () => ({
+vi.mock("../../infra/storage.js", () => ({
   readDocumentFile: vi.fn().mockResolvedValue(Buffer.from("not a real pdf")),
 }));
-vi.mock("./parserClient.js", () => ({
+vi.mock("../../ingest/parserClient.js", () => ({
   parseDocument: vi
     .fn()
     .mockResolvedValue({ ok: true, data: { asOfDate: "31.03.2026", holdings: [] } }),

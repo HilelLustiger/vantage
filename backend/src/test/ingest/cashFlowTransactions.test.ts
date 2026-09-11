@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveFlowAmount, selectFlowTransactions } from "./cashFlowTransactions.js";
+import { deriveFlowAmount, selectFlowTransactions } from "../../ingest/cashFlowTransactions.js";
 
 describe("selectFlowTransactions", () => {
   it("keeps buy, deposit, sell, and withdrawal", () => {

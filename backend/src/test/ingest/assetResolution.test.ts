@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAsset } from "../db/assets.js";
-import { resolveAssets } from "./assetResolution.js";
+import { createAsset } from "../../db/assets.js";
+import { resolveAssets } from "../../ingest/assetResolution.js";
 
 describe("resolveAssets", () => {
   it("matches a holding with a ticker that resolves to exactly one asset", async () => {

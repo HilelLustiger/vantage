@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { readDocumentFile, saveDocumentFile } from "./storage.js";
+import { readDocumentFile, saveDocumentFile } from "../../infra/storage.js";
 
 describe("saveDocumentFile / readDocumentFile", () => {
   it("round-trips the exact bytes written", async () => {

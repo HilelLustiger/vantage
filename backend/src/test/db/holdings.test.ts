@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAccountWithOwners } from "./accounts.js";
-import { createAsset } from "./assets.js";
-import { db } from "./client.js";
-import { insertDocument } from "./documents.js";
-import { listHoldingsForSnapshot } from "./holdings.js";
-import { createInstitution } from "./institutions.js";
-import { holdings, snapshots } from "./schema.js";
-import { createUser } from "./users.js";
+import { createAccountWithOwners } from "../../db/accounts.js";
+import { createAsset } from "../../db/assets.js";
+import { db } from "../../db/client.js";
+import { insertDocument } from "../../db/documents.js";
+import { listHoldingsForSnapshot } from "../../db/holdings.js";
+import { createInstitution } from "../../db/institutions.js";
+import { holdings, snapshots } from "../../db/schema.js";
+import { createUser } from "../../db/users.js";
 
 async function createTestSnapshot() {
   const user = await createUser({

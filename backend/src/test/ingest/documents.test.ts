@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { createAccountWithOwners } from "../db/accounts.js";
-import { db } from "../db/client.js";
-import { insertDocument } from "../db/documents.js";
-import { createInstitution } from "../db/institutions.js";
-import { documents } from "../db/schema.js";
-import { createUser } from "../db/users.js";
+import { createAccountWithOwners } from "../../db/accounts.js";
+import { db } from "../../db/client.js";
+import { insertDocument } from "../../db/documents.js";
+import { createInstitution } from "../../db/institutions.js";
+import { documents } from "../../db/schema.js";
+import { createUser } from "../../db/users.js";
 import {
   IllegalDocumentTransitionError,
   storeParsedData,
@@ -15,7 +15,7 @@ import {
   transitionDocumentToNeedsReview,
   transitionDocumentToNeedsReviewForValidityFailure,
   transitionDocumentWithFailure,
-} from "./documents.js";
+} from "../../ingest/documents.js";
 
 async function createTestAccount() {
   const user = await createUser({

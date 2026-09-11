@@ -1,18 +1,18 @@
 import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { createApp } from "../app.js";
-import { hashPassword } from "./password.js";
-import { createAccountWithOwners } from "../db/accounts.js";
-import { createAsset } from "../db/assets.js";
-import { insertDocument } from "../db/documents.js";
-import { createInstitution } from "../db/institutions.js";
-import { createUser } from "../db/users.js";
+import { createApp } from "../../app.js";
+import { hashPassword } from "../../api/password.js";
+import { createAccountWithOwners } from "../../db/accounts.js";
+import { createAsset } from "../../db/assets.js";
+import { insertDocument } from "../../db/documents.js";
+import { createInstitution } from "../../db/institutions.js";
+import { createUser } from "../../db/users.js";
 import {
   storeParsedData,
   transitionDocument,
   transitionDocumentToNeedsReview,
-} from "../ingest/documents.js";
+} from "../../ingest/documents.js";
 
 const parsedData = {
   asOfDate: "31.03.2026",

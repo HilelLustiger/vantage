@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAccountWithOwners } from "../db/accounts.js";
-import { createAsset, findAssetsByTicker } from "../db/assets.js";
-import { findCashFlowsForAsset } from "../db/cashFlows.js";
-import { findDocumentById, insertDocument } from "../db/documents.js";
-import { createInstitution } from "../db/institutions.js";
-import { createUser } from "../db/users.js";
-import { applyResolutions, buildReviewLines } from "./assetReviewFlow.js";
-import { transitionDocument, transitionDocumentToNeedsReview } from "./documents.js";
+import { createAccountWithOwners } from "../../db/accounts.js";
+import { createAsset, findAssetsByTicker } from "../../db/assets.js";
+import { findCashFlowsForAsset } from "../../db/cashFlows.js";
+import { findDocumentById, insertDocument } from "../../db/documents.js";
+import { createInstitution } from "../../db/institutions.js";
+import { createUser } from "../../db/users.js";
+import { applyResolutions, buildReviewLines } from "../../ingest/assetReviewFlow.js";
+import { transitionDocument, transitionDocumentToNeedsReview } from "../../ingest/documents.js";
 
 async function createTestAccount() {
   const user = await createUser({

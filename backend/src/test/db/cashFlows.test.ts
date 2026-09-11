@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAccountWithOwners } from "./accounts.js";
-import { createAsset } from "./assets.js";
-import { findCashFlowsForAsset, insertCashFlow } from "./cashFlows.js";
-import { insertDocument } from "./documents.js";
-import { createInstitution } from "./institutions.js";
-import { createUser } from "./users.js";
+import { createAccountWithOwners } from "../../db/accounts.js";
+import { createAsset } from "../../db/assets.js";
+import { findCashFlowsForAsset, insertCashFlow } from "../../db/cashFlows.js";
+import { insertDocument } from "../../db/documents.js";
+import { createInstitution } from "../../db/institutions.js";
+import { createUser } from "../../db/users.js";
 
 async function createTestAccount(name = "Test Account") {
   const user = await createUser({

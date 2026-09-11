@@ -5,7 +5,7 @@ import {
   findAssetsByIsin,
   findAssetsBySecurityNumber,
   findAssetsByTicker,
-} from "./assets.js";
+} from "../../db/assets.js";
 
 describe("createAsset", () => {
   it("persists securityNumber when provided", async () => {

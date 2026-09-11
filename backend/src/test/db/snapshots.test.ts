@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createAccountWithOwners } from "./accounts.js";
-import { db } from "./client.js";
-import { insertDocument } from "./documents.js";
-import { createInstitution } from "./institutions.js";
-import { snapshots } from "./schema.js";
+import { createAccountWithOwners } from "../../db/accounts.js";
+import { db } from "../../db/client.js";
+import { insertDocument } from "../../db/documents.js";
+import { createInstitution } from "../../db/institutions.js";
+import { snapshots } from "../../db/schema.js";
 import {
   findActiveSnapshot,
   findLatestActiveSnapshotsForUser,
@@ -12,8 +12,8 @@ import {
   findSnapshotById,
   findSnapshotVisibleToUser,
   listSnapshotsForUser,
-} from "./snapshots.js";
-import { createUser } from "./users.js";
+} from "../../db/snapshots.js";
+import { createUser } from "../../db/users.js";
 
 async function createTestUser() {
   return createUser({

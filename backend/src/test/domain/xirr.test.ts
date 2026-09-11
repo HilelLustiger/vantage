@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeXirr } from "./xirr.js";
+import { computeXirr } from "../../domain/xirr.js";
 
 describe("computeXirr", () => {
   it("solves a single-year round trip to exactly 10%", () => {
