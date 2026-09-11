@@ -46,7 +46,17 @@ describe("portfolio aggregation", () => {
 
     const res = await agent.get("/api/portfolio").expect(200);
 
-    expect(res.body).toEqual({ userId: expect.any(String), lines: [] });
+    // costBasis/profit/liveValue/documentValue are TODO(#59) stubs on the
+    // backend today — see backend/src/api/portfolio.ts.
+    expect(res.body).toEqual({
+      userId: expect.any(String),
+      lines: [],
+      costBasis: "0",
+      profit: "0",
+      simpleReturnPct: null,
+      liveValue: "0",
+      documentValue: "0",
+    });
   });
 
   it("aggregates across every visible account, in the default ILS currency", async () => {
