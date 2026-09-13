@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "@vantage/backend/app";
-import { createUser } from "@vantage/backend/db/users";
+import { createUser } from "@vantage/backend/repositories/users";
 import { hashPassword } from "@vantage/backend/password";
 
 // Exercises the real HTTP surface end-to-end against a real Postgres

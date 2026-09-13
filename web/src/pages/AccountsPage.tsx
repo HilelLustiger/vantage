@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
-import type { Account, Institution } from "@vantage/backend/dto";
+import type { Account, HouseholdUser, Institution } from "@vantage/backend/dto";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
@@ -11,8 +11,6 @@ import { useAuth } from "../context/AuthContext";
 import { accountsApi } from "../api/accounts";
 import { institutionsApi } from "../api/institutions";
 import { usersApi } from "../api/users";
-
-type HouseholdUser = { id: string; email: string };
 
 export function AccountsPage() {
   const { user } = useAuth();
@@ -37,14 +35,6 @@ export function AccountsPage() {
     refresh().finally(() => setIsLoading(false));
   }, []);
 
-  function institutionName(institutionId: string) {
-    return institutions.find((i) => i.id === institutionId)?.name ?? "Unknown institution";
-  }
-
-  function ownerEmails(ownerUserIds: string[]) {
-    return ownerUserIds.map((id) => users.find((u) => u.id === id)?.email ?? id);
-  }
-
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -68,10 +58,10 @@ export function AccountsPage() {
             {accounts.map((account) => (
               <tr key={account.id}>
                 <TableCell className="font-medium text-gray-900">{account.name}</TableCell>
-                <TableCell>{institutionName(account.institutionId)}</TableCell>
+                <TableCell>{account.institutionName}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
-                    {ownerEmails(account.ownerUserIds).map((email) => (
+                    {account.ownerEmails.map((email) => (
                       <Badge key={email}>{email}</Badge>
                     ))}
                   </div>
@@ -139,11 +129,14 @@ function AddAccountModal({
     }
     setIsSubmitting(true);
     try {
-      const institutionId =
-        institution.id ?? (await institutionsApi.create({ name: institution.label })).id;
+      // institution.id is set only when an existing institution was picked
+      // from the list — otherwise the typed label becomes a new one,
+      // created inline by the same request.
       await accountsApi.create({
-        institutionId,
         name,
+        ...(institution.id
+          ? { institutionId: institution.id }
+          : { newInstitutionName: institution.label }),
         ownerUserIds: [...ownerIds],
       });
       await onCreated();

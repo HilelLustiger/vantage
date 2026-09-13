@@ -1,12 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
-import type {
-  Asset,
-  AssetCurrencyValue,
-  AssetHistory,
-  AssetHoldingBreakdown,
-  AssetType,
-} from "@vantage/backend/dto";
+import type { AssetType, HoldingDetail, HoldingRow } from "@vantage/backend/dto";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
@@ -14,29 +8,23 @@ import { FreshnessBadge } from "../components/FreshnessBadge";
 import { Modal } from "../components/Modal";
 import { ValueCostBasisChart } from "../components/ValueCostBasisChart";
 import { assetsApi } from "../api/assets";
-import { portfolioApi } from "../api/portfolio";
+import { holdingsApi } from "../api/holdings";
 import { formatMoney, formatPct, signColor } from "../utils/format";
 
 const ASSET_TYPES: AssetType[] = ["stock", "etf", "mutual_fund", "bond", "cash"];
 
-// A fixed-rate deposit moves predictably with a known rate — a chart
-// wouldn't show anything the numbers don't already, so it's skipped for
-// this Asset type (see the mockup's own reasoning for the same case).
-function chartEligible(type: AssetType) {
-  return type !== "cash";
-}
+// No currency selector on this page in the mockup (unlike the Dashboard) —
+// holdings are always shown converted to the household's home currency.
+const DISPLAY_CURRENCY = "ILS";
 
 export function AssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [holdings, setHoldings] = useState<AssetHoldingBreakdown[]>([]);
+  const [holdings, setHoldings] = useState<HoldingRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [expandedAssetIds, setExpandedAssetIds] = useState<Set<string>>(new Set());
 
   async function refresh() {
-    const [assetList, byAsset] = await Promise.all([assetsApi.list(), portfolioApi.byAsset()]);
-    setAssets(assetList);
-    setHoldings(byAsset.assets);
+    setHoldings(await holdingsApi.list(DISPLAY_CURRENCY));
   }
 
   useEffect(() => {
@@ -55,20 +43,16 @@ export function AssetsPage() {
     });
   }
 
-  const holdingsByAssetId = new Map(holdings.map((h) => [h.assetId, h]));
-
-  // Open positions first (by total quantity desc — currency-agnostic, unlike
-  // value which can't be compared across currencies without conversion, see
-  // ADR 0005), closed positions and never-held Assets after, in registry
-  // order — closed keeps its realized history instead of just disappearing
-  // (ADR 0006), but still isn't a "current" holding for ranking purposes.
-  const sortedAssets = [...assets].sort((a, b) => {
-    const qa = Number(holdingsByAssetId.get(a.id)?.quantity ?? 0);
-    const qb = Number(holdingsByAssetId.get(b.id)?.quantity ?? 0);
-    if (qa === 0 && qb === 0) return 0;
-    if (qa === 0) return 1;
-    if (qb === 0) return -1;
-    return qb - qa;
+  // Open positions first (by converted value desc — all rows are already in
+  // DISPLAY_CURRENCY, so this is a fair comparison unlike native-currency
+  // quantities), closed positions after — closed keeps its realized history
+  // instead of just disappearing (see ClosedHoldingDetail), but still isn't
+  // a "current" holding for ranking purposes.
+  const sortedHoldings = [...holdings].sort((a, b) => {
+    const aOpen = a.detail.status === "open";
+    const bOpen = b.detail.status === "open";
+    if (aOpen !== bOpen) return aOpen ? -1 : 1;
+    return Number(b.value ?? 0) - Number(a.value ?? 0);
   });
 
   return (
@@ -86,19 +70,20 @@ export function AssetsPage() {
       </p>
 
       <div className="space-y-4">
-        {sortedAssets.map((asset) => (
-          <AssetCard
-            key={asset.id}
-            asset={asset}
-            holding={holdingsByAssetId.get(asset.id)}
-            isExpanded={expandedAssetIds.has(asset.id)}
-            onToggle={() => toggleExpanded(asset.id)}
+        {sortedHoldings.map((holding) => (
+          <HoldingCard
+            key={holding.assetId}
+            holding={holding}
+            isExpanded={expandedAssetIds.has(holding.assetId)}
+            onToggle={() => toggleExpanded(holding.assetId)}
           />
         ))}
-        {!isLoading && assets.length === 0 && (
+        {!isLoading && holdings.length === 0 && (
           <Card className="text-center text-sm text-gray-500">No assets yet.</Card>
         )}
       </div>
+
+      {!isLoading && holdings.length > 0 && <FreshnessLegend />}
 
       {isModalOpen && (
         <AddAssetModal
@@ -113,232 +98,200 @@ export function AssetsPage() {
   );
 }
 
-function AssetCard({
-  asset,
+// Explains FreshnessBadge's color tiers — the tiers/thresholds themselves
+// already live there, this just spells out what each color means.
+const FRESHNESS_LEGEND: { label: string; color: string }[] = [
+  { label: "Live market price", color: "#10b981" },
+  { label: "From statement, recent", color: "#9ca3af" },
+  { label: "From statement, aging", color: "#f59e0b" },
+  { label: "From statement, stale", color: "#dc2626" },
+  { label: "Closed, fully sold", color: "#d1d5db" },
+];
+
+function FreshnessLegend() {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-5 text-xs text-gray-400">
+      {FRESHNESS_LEGEND.map(({ label, color }) => (
+        <span key={label} className="flex items-center gap-1.5">
+          <span
+            className="inline-block h-[7px] w-[7px] shrink-0 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function HoldingCard({
   holding,
   isExpanded,
   onToggle,
 }: {
-  asset: Asset;
-  holding: AssetHoldingBreakdown | undefined;
+  holding: HoldingRow;
   isExpanded: boolean;
   onToggle: () => void;
 }) {
-  const isHeld = holding !== undefined && holding.valuesByCurrency.length > 0;
-  // Every currency entry for one Asset moves open->closed together (closed
-  // means zero current quantity overall) — the first entry's status stands
-  // in for the whole Asset.
-  const isClosed = isHeld && holding.valuesByCurrency[0].status === "closed";
+  const isClosed = holding.detail.status === "closed";
 
   return (
     <Card className="p-0">
       <button
         type="button"
-        onClick={isHeld ? onToggle : undefined}
-        disabled={!isHeld}
-        className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left disabled:cursor-default"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left"
       >
         <div className="flex min-w-0 items-center gap-3">
           <div className="min-w-0">
             <p className={`truncate font-medium ${isClosed ? "text-gray-400" : "text-gray-900"}`}>
-              {asset.name}
-              {asset.ticker && (
-                <span className="ml-1 font-normal text-gray-400">({asset.ticker})</span>
+              {holding.name}
+              {holding.ticker && (
+                <span className="ml-1 font-normal text-gray-400">({holding.ticker})</span>
               )}
             </p>
           </div>
-          <Badge className={isClosed ? "bg-gray-100 text-gray-400" : undefined}>{asset.type}</Badge>
+          <Badge className={isClosed ? "bg-gray-100 text-gray-400" : undefined}>
+            {holding.type}
+          </Badge>
         </div>
 
         <div className="flex shrink-0 items-center gap-4">
-          {isHeld && (
-            <FreshnessBadge
-              status={holding.valuesByCurrency[0].status}
-              freshness={holding.valuesByCurrency[0].freshness}
-              closedAt={holding.valuesByCurrency[0].heldTo}
-            />
-          )}
+          <FreshnessBadge
+            status={holding.detail.status}
+            freshness={holding.freshness}
+            closedOn={holding.closedOn}
+          />
           <span className={`text-sm ${isClosed ? "text-gray-300" : "text-gray-500"}`}>
-            {isHeld && !isClosed ? holding.quantity : "—"}
+            {holding.quantity ?? "—"}
           </span>
           <span className={`text-sm font-medium ${isClosed ? "text-gray-400" : "text-gray-900"}`}>
-            {isHeld && !isClosed
-              ? holding.valuesByCurrency
-                  .map((v) => formatMoney(Number(v.value), v.currency))
-                  .join(" · ")
-              : "—"}
+            {holding.value === null ? "—" : formatMoney(Number(holding.value), DISPLAY_CURRENCY)}
           </span>
-          {isHeld && (isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </button>
 
-      {isExpanded && isHeld && (
-        <div className="space-y-4 border-t border-gray-100 px-6 py-4">
-          {holding.valuesByCurrency.map((v) => (
-            <CurrencyDetail
-              key={v.currency}
-              assetId={asset.id}
-              assetType={asset.type}
-              value={v}
-              showCurrencyLabel={holding.valuesByCurrency.length > 1}
-            />
-          ))}
+      {isExpanded && (
+        <div className="border-t border-gray-100 px-6 py-4">
+          <HoldingDetailView detail={holding.detail} />
         </div>
       )}
     </Card>
   );
 }
 
-function CurrencyDetail({
-  assetId,
-  assetType,
-  value,
-  showCurrencyLabel,
-}: {
-  assetId: string;
-  assetType: AssetType;
-  value: AssetCurrencyValue;
-  showCurrencyLabel: boolean;
-}) {
-  if (value.status === "closed") {
-    return <ClosedPositionDetail value={value} showCurrencyLabel={showCurrencyLabel} />;
+function HoldingDetailView({ detail }: { detail: HoldingDetail }) {
+  if (detail.status === "closed") {
+    return <ClosedPositionDetail detail={detail} />;
   }
 
   return (
     <div>
-      {showCurrencyLabel && (
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-          {value.currency}
-        </p>
-      )}
-
-      {chartEligible(assetType) && (
+      {detail.chart && (
         <div className="mb-4">
           <p className="mb-2 text-xs text-gray-400">
             Value vs. cost basis for this holding — shaded area is this asset's own real profit.
           </p>
-          <AssetChart assetId={assetId} freshness={value.freshness} />
+          <ValueCostBasisChart
+            points={detail.chart.map((p) => ({
+              date: p.date,
+              value: Number(p.value),
+              costBasis: Number(p.costBasis),
+            }))}
+            height={140}
+          />
         </div>
       )}
 
-      <MetricsGrid value={value} />
+      <MetricsGrid detail={detail} />
     </div>
   );
 }
 
-function AssetChart({
-  assetId,
-  freshness,
-}: {
-  assetId: string;
-  freshness: AssetCurrencyValue["freshness"];
-}) {
-  const [history, setHistory] = useState<AssetHistory | null>(null);
-
-  useEffect(() => {
-    assetsApi.history(assetId).then(setHistory);
-  }, [assetId]);
-
-  if (!history) return null;
-
-  const points = history.points.map((p) => ({
-    date: p.date,
-    value: Number(p.value),
-    costBasis: Number(p.costBasis),
-  }));
-  const lastPoint = points[points.length - 1];
-  const liveNow =
-    freshness.kind === "live" && lastPoint
-      ? { value: Number(history.points[history.points.length - 1].value) }
-      : undefined;
-
-  return <ValueCostBasisChart points={points} liveNow={liveNow} height={140} />;
-}
-
-function MetricsGrid({ value }: { value: AssetCurrencyValue }) {
-  const profit = Number(value.profit);
-  const simpleReturnPct = value.simpleReturnPct;
+function MetricsGrid({ detail }: { detail: Extract<HoldingDetail, { status: "open" }> }) {
+  const profit = Number(detail.profit);
 
   return (
     <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-      <MetricRow label="Cost basis" value={formatMoney(Number(value.costBasis), value.currency)} />
+      <MetricRow
+        label="Cost basis"
+        value={formatMoney(Number(detail.costBasis), DISPLAY_CURRENCY)}
+      />
       <MetricRow
         label="Profit"
-        value={formatMoney(profit, value.currency)}
+        value={formatMoney(profit, DISPLAY_CURRENCY)}
         className={signColor(profit)}
       />
       <MetricRow
         label="Return %"
-        value={simpleReturnPct === null ? "—" : formatPct(simpleReturnPct)}
-        className={simpleReturnPct === null ? undefined : signColor(simpleReturnPct)}
+        value={detail.returnPct === null ? "—" : formatPct(detail.returnPct)}
+        className={detail.returnPct === null ? undefined : signColor(detail.returnPct)}
       />
-      <MetricRow
-        label="Tax on profit"
-        value={formatMoney(Number(value.taxOnProfit), value.currency)}
-      />
-      <MetricRow label="Net of tax" value={formatMoney(Number(value.netOfTax), value.currency)} />
-      {/* De-emphasized/hidden below the minimum holding period (#42) — the
-          backend already collapses "too new" and "uncomputable" into the
-          same null, so there's nothing more specific to show. */}
-      {value.xirr !== null && (
-        <MetricRow
-          label="XIRR"
-          value={formatPct(value.xirr * 100)}
-          className={signColor(value.xirr)}
-        />
+      {/* Fixed-rate deposits show Rate instead of tax/XIRR — tax-on-profit
+          framing doesn't apply the same way to them, per the mockup. */}
+      {detail.annualRatePct !== undefined ? (
+        <MetricRow label="Rate" value={`${detail.annualRatePct}% annual`} />
+      ) : (
+        <>
+          <MetricRow
+            label="Tax on profit"
+            value={formatMoney(Number(detail.taxOnProfit), DISPLAY_CURRENCY)}
+          />
+          {/* De-emphasized/hidden below the minimum holding period — the
+              backend already collapses "too new" and "uncomputable" into
+              the same null, so there's nothing more specific to show. */}
+          {detail.xirr != null && (
+            <MetricRow
+              label="XIRR"
+              value={formatPct(detail.xirr * 100)}
+              className={signColor(detail.xirr)}
+            />
+          )}
+        </>
       )}
     </dl>
   );
 }
 
 // A closed position (fully sold) keeps its realized outcome instead of
-// disappearing into "—" — a distinct state from never having been held,
-// see ADR 0006.
+// disappearing into "—" — a distinct state from never having been held.
 function ClosedPositionDetail({
-  value,
-  showCurrencyLabel,
+  detail,
 }: {
-  value: AssetCurrencyValue;
-  showCurrencyLabel: boolean;
+  detail: Extract<HoldingDetail, { status: "closed" }>;
 }) {
-  const realizedProfit = Number(value.realizedProfit ?? 0);
+  const realizedProfit = Number(detail.realizedProfit);
   return (
     <div>
-      {showCurrencyLabel && (
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-          {value.currency}
-        </p>
-      )}
       <p className="mb-3 text-xs text-gray-400">
         Fully sold — kept for its realized history, not blended into your current live/stale total.
       </p>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
         <MetricRow
           label="Held"
-          value={value.heldFrom && value.heldTo ? `${value.heldFrom} – ${value.heldTo}` : "—"}
+          value={`${detail.heldFrom} – ${detail.heldTo}`}
           className="text-gray-700"
         />
         <MetricRow
           label="Cost basis"
-          value={formatMoney(Number(value.costBasis), value.currency)}
+          value={formatMoney(Number(detail.costBasis), DISPLAY_CURRENCY)}
           className="text-gray-700"
         />
         <MetricRow
           label="Sold for"
-          value={formatMoney(Number(value.realizedProceeds ?? 0), value.currency)}
+          value={formatMoney(Number(detail.soldFor), DISPLAY_CURRENCY)}
           className="text-gray-700"
         />
         <MetricRow
           label="Realized profit"
-          value={formatMoney(realizedProfit, value.currency)}
+          value={formatMoney(realizedProfit, DISPLAY_CURRENCY)}
           className={signColor(realizedProfit)}
         />
         <MetricRow
           label="Return %"
-          value={value.realizedReturnPct == null ? "—" : formatPct(value.realizedReturnPct)}
-          className={
-            value.realizedReturnPct == null ? undefined : signColor(value.realizedReturnPct)
-          }
+          value={formatPct(detail.realizedReturnPct)}
+          className={signColor(detail.realizedReturnPct)}
         />
       </dl>
     </div>

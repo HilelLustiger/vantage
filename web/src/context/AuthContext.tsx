@@ -1,8 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { User } from "@vantage/backend/dto";
+import type { AuthedUser } from "@vantage/backend/dto";
 import { apiClient } from "../api/client";
-
-type AuthedUser = Pick<User, "id" | "email">;
 
 interface AuthContextValue {
   user: AuthedUser | null;

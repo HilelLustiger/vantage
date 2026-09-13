@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { FileWarning } from "lucide-react";
+import { FileWarning, SearchX, ShieldCheck } from "lucide-react";
 import type {
   Asset,
   AssetType,
-  Document,
   DocumentResolution,
   DocumentReview,
-  DocumentReviewLine,
-  ValidityCheckResult,
+  DocumentSummary,
+  ExtractedLine,
 } from "@vantage/backend/dto";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Combobox, type ComboboxSelection } from "../components/Combobox";
+import { DocumentPreviewPane } from "../components/DocumentPreviewPane";
+import { ManualHoldingsForm, type ManualHoldingRow } from "../components/ManualHoldingsForm";
 import { assetsApi } from "../api/assets";
 import { documentsApi } from "../api/documents";
 import { ApiError } from "../api/client";
@@ -29,26 +30,19 @@ export function ReviewDocumentPage() {
   const { documentId } = useParams<{ documentId: string }>();
   const navigate = useNavigate();
   const [review, setReview] = useState<DocumentReview | null>(null);
-  const [failedChecks, setFailedChecks] = useState<ValidityCheckResult[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [lineStates, setLineStates] = useState<Record<number, LineState>>({});
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [result, setResult] = useState<Document | null>(null);
+  const [result, setResult] = useState<DocumentSummary | null>(null);
 
   useEffect(() => {
     if (!documentId) return;
     Promise.all([documentsApi.review(documentId), assetsApi.list()])
-      .then(async ([reviewResult, assetList]) => {
+      .then(([reviewResult, assetList]) => {
         setReview(reviewResult);
         setAssets(assetList);
-        // The validity-failure variant additionally shows which checks
-        // failed — only the Document itself carries that (ADR 0008).
-        if (reviewResult.reason === "validity_failure") {
-          const document = await documentsApi.get(documentId);
-          setFailedChecks(document.validityFailedChecks ?? []);
-        }
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 404) {
@@ -63,7 +57,8 @@ export function ReviewDocumentPage() {
     setLineStates((prev) => ({ ...prev, [index]: state }));
   }
 
-  const unresolvedLines = review?.lines.filter((line) => !line.resolvedAssetId) ?? [];
+  const lines = review && review.reason !== "privacy_preflight_aborted" ? review.lines : [];
+  const unresolvedLines = lines.filter((line) => !line.resolvedAssetId);
   const allResolved = unresolvedLines.every((line) => {
     const state = lineStates[line.index];
     if (!state) return false;
@@ -72,30 +67,11 @@ export function ReviewDocumentPage() {
     return false;
   });
 
-  async function handleConfirm() {
-    if (!documentId || !allResolved) return;
+  async function submitResolutions(resolutions: DocumentResolution[]) {
+    if (!documentId) return;
     setError(null);
     setIsSubmitting(true);
     try {
-      const resolutions: DocumentResolution[] = unresolvedLines.map((line) => {
-        const state = lineStates[line.index];
-        if (state.mode === "match") {
-          return { index: line.index, assetId: state.assetId };
-        }
-        if (state.mode === "create") {
-          return {
-            index: line.index,
-            newAsset: {
-              type: state.type,
-              name: state.name.trim(),
-              ticker: state.ticker.trim() || undefined,
-              isin: state.isin.trim() || undefined,
-            },
-          };
-        }
-        throw new Error(`line ${line.index} has no resolution`);
-      });
-
       const document = await documentsApi.resolve(documentId, resolutions);
       if (document.status === "committed") {
         navigate("/import");
@@ -107,6 +83,47 @@ export function ReviewDocumentPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleConfirm() {
+    if (!allResolved) return;
+    const resolutions: DocumentResolution[] = unresolvedLines.map((line) => {
+      const state = lineStates[line.index];
+      if (state.mode === "match") {
+        return { index: line.index, assetId: state.assetId };
+      }
+      if (state.mode === "create") {
+        return {
+          index: line.index,
+          newAsset: {
+            type: state.type,
+            name: state.name.trim(),
+            ticker: state.ticker.trim() || undefined,
+            isin: state.isin.trim() || undefined,
+          },
+        };
+      }
+      throw new Error(`line ${line.index} has no resolution`);
+    });
+    await submitResolutions(resolutions);
+  }
+
+  async function handleManualConfirm(rows: ManualHoldingRow[]) {
+    const resolutions: DocumentResolution[] = rows
+      .filter((row) => row.assetName.trim() && row.quantity && row.value)
+      .map((row) => ({
+        manualHolding: {
+          // No type picker in this form (no extraction ran to suggest one) —
+          // defaults to "stock" like the quick-create path in
+          // ReviewLineEditor below; correctable afterward from the Assets
+          // page if wrong.
+          newAsset: { type: "stock", name: row.assetName.trim() },
+          quantity: row.quantity,
+          value: row.value,
+          currency: row.currency,
+        },
+      }));
+    await submitResolutions(resolutions);
   }
 
   if (notFound) {
@@ -143,58 +160,128 @@ export function ReviewDocumentPage() {
   }
 
   return (
-    <div>
-      <h1 className="mb-4 text-lg font-semibold text-gray-900">Review statement lines</h1>
+    <div className="flex h-[calc(100vh-8rem)] flex-col">
+      <Link to="/import" className="mb-1.5 shrink-0 text-xs text-gray-400 hover:text-gray-600">
+        &larr; Back to Import
+      </Link>
+      <h1 className="mb-4 shrink-0 text-lg font-semibold text-gray-900">
+        {review.reason === "privacy_preflight_aborted"
+          ? "Manual correction needed"
+          : "Review statement lines"}
+      </h1>
 
-      {review.reason === "validity_failure" && (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3.5">
-          <FileWarning size={18} className="mt-0.5 shrink-0 text-amber-600" />
-          <div>
-            <p className="text-sm font-semibold text-amber-900">Some values didn't check out</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-800">
-              The numbers below didn't match what the statement itself claims — confirm or correct
-              them before committing.
-            </p>
-            {failedChecks.length > 0 && (
-              <ul className="mt-2 space-y-0.5 text-xs text-amber-700">
-                {failedChecks.map((check) => (
-                  <li key={check.name}>
-                    {check.name}: computed {check.computed ?? "—"}, statement claims{" "}
-                    {check.claimed ?? "—"}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Dual-pane per ADR-0008: every NeedsReview reason converges on this
+          one shape (original document preview + editable form), varying
+          only in banner text and how pre-filled the form arrives. */}
+      <div className="flex min-h-0 flex-1 gap-6">
+        {review.reason === "privacy_preflight_aborted" ? (
+          <>
+            <DocumentPreviewPane highlightNote="Not extracted — fill in on the right" />
+            <div className="flex w-[58%] flex-1 flex-col gap-4">
+              <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3.5">
+                <ShieldCheck size={18} className="mt-0.5 shrink-0 text-blue-600" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">
+                    We didn&apos;t send this document to an external service
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-blue-800">
+                    Part of this statement looked like it might contain personal identifying
+                    information, so as a precaution we skipped automatic extraction for it entirely
+                    rather than risk sending it out. Please fill in the holdings below using the
+                    preview on the left.
+                  </p>
+                </div>
+              </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <ManualHoldingsForm
+                accountHolder={review.locallyConfirmed.accountHolder}
+                accountNumber={review.locallyConfirmed.accountNumber}
+                onCancel={() => navigate("/import")}
+                onConfirm={handleManualConfirm}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <DocumentPreviewPane />
 
-      <div className="space-y-4">
-        {review.lines.map((line) =>
-          line.resolvedAssetId ? (
-            <MatchedLineRow key={line.index} line={line} assets={assets} />
-          ) : (
-            <ReviewLineEditor
-              key={line.index}
-              line={line}
-              assets={assets}
-              state={lineStates[line.index] ?? { mode: "unset" }}
-              onChange={(state) => setLineState(line.index, state)}
-            />
-          ),
+            <Card className="flex w-[58%] flex-1 flex-col overflow-y-auto">
+              {review.reason === "validity_failure" && (
+                <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3.5">
+                  <FileWarning size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">
+                      Some values didn't check out
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-amber-800">
+                      The numbers below didn't match what the statement itself claims — confirm or
+                      correct them before committing.
+                    </p>
+                    {review.failedChecks.length > 0 && (
+                      <ul className="mt-2 space-y-0.5 text-xs text-amber-700">
+                        {review.failedChecks.map((check) => (
+                          <li key={check.name}>
+                            {check.name}: computed {check.computed ?? "—"}, statement claims{" "}
+                            {check.claimed ?? "—"}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {review.reason === "asset_resolution" && (
+                <div className="mb-6 flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3.5">
+                  <SearchX size={18} className="mt-0.5 shrink-0 text-blue-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900">
+                      Some holdings need a match
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-blue-800">
+                      We couldn't confidently match every line to an existing Asset — search for the
+                      right one or create a new one below, using the preview on the left.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {lines.map((line) =>
+                  line.resolvedAssetId ? (
+                    <MatchedLineRow key={line.index} line={line} assets={assets} />
+                  ) : (
+                    <ReviewLineEditor
+                      key={line.index}
+                      line={line}
+                      assets={assets}
+                      state={lineStates[line.index] ?? { mode: "unset" }}
+                      onChange={(state) => setLineState(line.index, state)}
+                    />
+                  ),
+                )}
+              </div>
+
+              {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+              <div className="flex-1" />
+
+              <Button
+                className="mt-6"
+                disabled={!allResolved || isSubmitting}
+                onClick={handleConfirm}
+              >
+                {isSubmitting ? "Confirming..." : "Confirm"}
+              </Button>
+            </Card>
+          </>
         )}
       </div>
-
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-      <Button className="mt-6" disabled={!allResolved || isSubmitting} onClick={handleConfirm}>
-        {isSubmitting ? "Confirming..." : "Confirm"}
-      </Button>
     </div>
   );
 }
 
-function MatchedLineRow({ line, assets }: { line: DocumentReviewLine; assets: Asset[] }) {
+function MatchedLineRow({ line, assets }: { line: ExtractedLine; assets: Asset[] }) {
   const asset = assets.find((a) => a.id === line.resolvedAssetId);
   return (
     <Card className="flex items-center justify-between">
@@ -217,7 +304,7 @@ function ReviewLineEditor({
   state,
   onChange,
 }: {
-  line: DocumentReviewLine;
+  line: ExtractedLine;
   assets: Asset[];
   state: LineState;
   onChange: (state: LineState) => void;

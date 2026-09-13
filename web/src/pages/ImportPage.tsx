@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { UploadCloud } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { Account, Document, DocumentStatus } from "@vantage/backend/dto";
+import type { Account, DocumentStatus, DocumentSummary } from "@vantage/backend/dto";
 import { Badge } from "../components/Badge";
 import { Card } from "../components/Card";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell } from "../components/Table";
@@ -22,14 +22,14 @@ interface UploadRow {
   id: string;
   fileName: string;
   status: "uploading" | "done" | "error";
-  document?: Document;
+  document?: DocumentSummary;
   error?: string;
 }
 
 export function ImportPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [uploadRows, setUploadRows] = useState<UploadRow[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -45,10 +45,6 @@ export function ImportPage() {
     });
     refreshDocuments();
   }, []);
-
-  function accountName(accountId: string) {
-    return accounts.find((a) => a.id === accountId)?.name ?? "Unknown account";
-  }
 
   async function uploadFiles(files: File[]) {
     if (!selectedAccountId || files.length === 0) return;
@@ -173,7 +169,7 @@ export function ImportPage() {
             {sortedDocuments.map((document) => (
               <tr key={document.id}>
                 <TableCell>{new Date(document.uploadedAt).toLocaleString()}</TableCell>
-                <TableCell>{accountName(document.accountId)}</TableCell>
+                <TableCell>{document.accountName}</TableCell>
                 <TableCell>
                   <Badge className={STATUS_STYLES[document.status]}>{document.status}</Badge>
                 </TableCell>

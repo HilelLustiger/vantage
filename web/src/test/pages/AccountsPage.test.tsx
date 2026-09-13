@@ -8,8 +8,10 @@ const institution = { id: "inst-1", name: "Existing Bank" };
 const account = {
   id: "acc-1",
   institutionId: "inst-1",
+  institutionName: "Existing Bank",
   name: "Brokerage",
   ownerUserIds: ["user-1"],
+  ownerEmails: ["me@example.com"],
 };
 const currentUser = { id: "user-1", email: "me@example.com" };
 
@@ -31,13 +33,17 @@ function mockApi({
     if (path === "/api/accounts" && method === "GET") return jsonResponse(accounts);
     if (path === "/api/institutions" && method === "GET") return jsonResponse(institutions);
     if (path === "/api/users" && method === "GET") return jsonResponse(users);
-    if (path === "/api/institutions" && method === "POST") {
-      const body = JSON.parse(init!.body as string);
-      return jsonResponse({ id: "inst-new", name: body.name }, 201);
-    }
     if (path === "/api/accounts" && method === "POST") {
       const body = JSON.parse(init!.body as string);
-      return jsonResponse({ id: "acc-new", ...body }, 201);
+      return jsonResponse(
+        {
+          id: "acc-new",
+          institutionName: body.newInstitutionName ?? "Existing Bank",
+          ownerEmails: [currentUser.email],
+          ...body,
+        },
+        201,
+      );
     }
     throw new Error(`unexpected fetch: ${method} ${path}`);
   });
@@ -107,13 +113,10 @@ describe("AccountsPage", () => {
     )!;
     const body = JSON.parse((postCall[1] as RequestInit).body as string);
     expect(body.institutionId).toBe("inst-1");
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      "/api/institutions",
-      expect.objectContaining({ method: "POST" }),
-    );
+    expect(body.newInstitutionName).toBeUndefined();
   });
 
-  it("creates a new institution first when the typed name doesn't match an existing one", async () => {
+  it("sends newInstitutionName inline when the typed name doesn't match an existing one — no separate institution-create request", async () => {
     stubAuth();
     const fetchMock = mockApi();
 
@@ -131,7 +134,7 @@ describe("AccountsPage", () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/institutions",
+        "/api/accounts",
         expect.objectContaining({ method: "POST" }),
       ),
     );
@@ -139,6 +142,7 @@ describe("AccountsPage", () => {
       ([path, init]) => path === "/api/accounts" && (init as RequestInit)?.method === "POST",
     )!;
     const body = JSON.parse((accountCall[1] as RequestInit).body as string);
-    expect(body.institutionId).toBe("inst-new");
+    expect(body.newInstitutionName).toBe("Brand New Bank");
+    expect(body.institutionId).toBeUndefined();
   });
 });

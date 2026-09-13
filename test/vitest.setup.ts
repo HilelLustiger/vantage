@@ -1,10 +1,9 @@
-import { createServer, type Server } from "node:http";
 import path from "node:path";
 import dotenv from "dotenv";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { afterAll, beforeAll } from "vitest";
+import { beforeAll } from "vitest";
 
 // npm runs this workspace's scripts with cwd = test/, so the root .env is one
 // level up. No-ops quietly if the file doesn't exist (e.g. real env already
@@ -40,8 +39,6 @@ const testUrl = new URL(devUrl);
 testUrl.pathname = `/${testDbName}`;
 process.env.DATABASE_URL = testUrl.toString();
 
-let fakeParser: Server | undefined;
-
 beforeAll(async () => {
   const quotedDbName = `"${testDbName.replace(/"/g, '""')}"`;
   const admin = new Pool({ connectionString: devUrl.toString() });
@@ -64,33 +61,9 @@ beforeAll(async () => {
   // database itself instead of just relocating the original problem.
   await testPool.query(`
     TRUNCATE TABLE
-      cash_flows, holdings, snapshots, documents, account_users,
-      accounts, institutions, assets, fx_rates, session, users
+      transactions, holdings, documents, account_owners,
+      accounts, institutions, assets, session, users
     RESTART IDENTITY CASCADE
   `);
   await testPool.end();
-
-  // Integration tests exercise the real ingest -> parser HTTP call (#22) but
-  // shouldn't depend on the actual Python service (or docker) being up. A
-  // minimal stand-in that always reports a successful, empty parse exercises
-  // the real request/response wire format; PARSER_URL is pointed at it for
-  // this run, overriding whatever .env/CI set. `holdings: []` (not `{}`) so
-  // #20's asset-resolution step, which validates this shape, doesn't reject
-  // it as malformed; `asOfDate` is required too so #21's commit step
-  // succeeds instead of failing on a missing statement date — the full
-  // pipeline now runs uploaded -> processing -> committed end to end.
-  fakeParser = createServer((_req, res) => {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, data: { asOfDate: "31.03.2026", holdings: [] } }));
-  });
-  await new Promise<void>((resolve) => fakeParser.listen(0, resolve));
-  const { port } = fakeParser.address() as { port: number };
-  process.env.PARSER_URL = `http://localhost:${port}`;
-});
-
-afterAll(async () => {
-  if (!fakeParser) return;
-  await new Promise<void>((resolve, reject) =>
-    fakeParser!.close((err) => (err ? reject(err) : resolve())),
-  );
 });

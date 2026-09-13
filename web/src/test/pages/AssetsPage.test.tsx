@@ -1,36 +1,33 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AssetCurrencyValue } from "@vantage/backend/dto";
+import type { HoldingRow, OpenHoldingDetail } from "@vantage/backend/dto";
 import { AssetsPage } from "../../pages/AssetsPage";
 
-const asset = { id: "asset-1", type: "stock", name: "Example Corp", ticker: "EX" };
-const unheldAsset = { id: "asset-2", type: "cash", name: "Unheld Fund" };
-
-interface TestAsset {
-  id: string;
-  type: string;
-  name: string;
-  ticker?: string;
-}
-
-// Full AssetCurrencyValue shape (#43) with sane defaults — individual
-// tests only override the fields they care about.
-function currencyValue(overrides: Partial<AssetCurrencyValue> = {}): AssetCurrencyValue {
-  return {
-    currency: "ILS",
-    value: "1000",
-    costBasis: "800",
-    costBasisSource: "institution_stated",
-    profit: "200",
-    simpleReturnPct: 25,
-    xirr: 0.1,
-    taxOnProfit: "50",
-    netOfTax: "950",
-    freshness: { kind: "live", updatedAt: "2026-01-01T00:00:00.000Z" },
+// Full HoldingRow shape with sane defaults — individual tests only override
+// the fields they care about.
+function holdingRow(overrides: Partial<HoldingRow> = {}): HoldingRow {
+  const detail: OpenHoldingDetail = {
     status: "open",
+    costBasis: "800",
+    profit: "200",
+    returnPct: 25,
+    taxOnProfit: "50",
+    xirr: 0.1,
+  };
+  return {
+    assetId: "asset-1",
+    name: "Example Corp",
+    ticker: "EX",
+    type: "stock",
+    nativeCurrency: "ILS",
+    nativeValue: "1000",
+    value: "1000",
+    freshness: { tier: "live", updatedSecondsAgo: 5 },
+    quantity: "15",
+    detail,
     ...overrides,
-  } as AssetCurrencyValue;
+  };
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -38,24 +35,17 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function mockApi({
-  assets = [asset],
-  byAsset = [],
+  holdings = [holdingRow()],
 }: {
-  assets?: TestAsset[];
-  byAsset?: { assetId: string; quantity: string; valuesByCurrency: AssetCurrencyValue[] }[];
+  holdings?: HoldingRow[];
 } = {}) {
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
-    if (path === "/api/assets" && method === "GET") return jsonResponse(assets);
+    if (path.startsWith("/api/holdings") && method === "GET") return jsonResponse(holdings);
+    if (path === "/api/assets" && method === "GET") return jsonResponse([]);
     if (path === "/api/assets" && method === "POST") {
       const body = JSON.parse(init!.body as string);
       return jsonResponse({ id: "asset-new", ...body }, 201);
-    }
-    if (path === "/api/portfolio/by-asset" && method === "GET") {
-      return jsonResponse({ userId: "u1", assets: byAsset });
-    }
-    if (path.match(/^\/api\/assets\/[^/]+\/history$/) && method === "GET") {
-      return jsonResponse({ assetId: "asset-1", currency: "ILS", points: [] });
     }
     throw new Error(`unexpected fetch: ${method} ${path}`);
   });
@@ -68,7 +58,7 @@ describe("AssetsPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("lists assets", async () => {
+  it("lists holdings", async () => {
     mockApi();
 
     render(<AssetsPage />);
@@ -77,8 +67,8 @@ describe("AssetsPage", () => {
     expect(screen.getByText("(EX)")).toBeDefined();
   });
 
-  it("shows an empty state when there are no assets", async () => {
-    mockApi({ assets: [] });
+  it("shows an empty state when there are no holdings", async () => {
+    mockApi({ holdings: [] });
 
     render(<AssetsPage />);
 
@@ -102,36 +92,23 @@ describe("AssetsPage", () => {
     );
   });
 
-  it("shows quantity and a native-currency value chip per currency held, no conversion", async () => {
-    mockApi({
-      byAsset: [
-        {
-          assetId: "asset-1",
-          quantity: "15",
-          valuesByCurrency: [
-            currencyValue({ currency: "ILS", value: "1000" }),
-            currencyValue({ currency: "USD", value: "500" }),
-          ],
-        },
-      ],
-    });
+  it("shows quantity and the (already converted) value", async () => {
+    mockApi({ holdings: [holdingRow({ quantity: "15", value: "1000" })] });
 
     render(<AssetsPage />);
 
     await waitFor(() => expect(screen.getByText("15")).toBeDefined());
     expect(screen.getByText(/₪1,000/)).toBeDefined();
-    expect(screen.getByText(/\$500/)).toBeDefined();
   });
 
-  it("shows a placeholder and no expand affordance for an Asset that isn't currently held", async () => {
-    mockApi({ assets: [asset, unheldAsset], byAsset: [] });
+  it("shows the freshness legend once holdings have loaded", async () => {
+    mockApi();
 
     render(<AssetsPage />);
 
-    await waitFor(() => expect(screen.getByText("Unheld Fund")).toBeDefined());
-    const card = screen.getByText("Unheld Fund").closest("button") as HTMLButtonElement;
-    expect(card.textContent).toContain("—");
-    expect(card.disabled).toBe(true);
+    await waitFor(() => expect(screen.getByText("Example Corp")).toBeDefined());
+    expect(screen.getByText("Live market price")).toBeDefined();
+    expect(screen.getByText("Closed, fully sold")).toBeDefined();
   });
 
   it("has no currency selector on this page", async () => {
@@ -145,14 +122,17 @@ describe("AssetsPage", () => {
 
   it("expands a card to reveal profit/tax/return metrics, and collapses again", async () => {
     mockApi({
-      byAsset: [
-        {
-          assetId: "asset-1",
-          quantity: "15",
-          valuesByCurrency: [
-            currencyValue({ costBasis: "800", profit: "200", taxOnProfit: "50", netOfTax: "950" }),
-          ],
-        },
+      holdings: [
+        holdingRow({
+          detail: {
+            status: "open",
+            costBasis: "800",
+            profit: "200",
+            returnPct: 25,
+            taxOnProfit: "50",
+            xirr: 0.1,
+          },
+        }),
       ],
     });
 
@@ -165,16 +145,52 @@ describe("AssetsPage", () => {
     expect(screen.getByText("Cost basis")).toBeDefined();
     expect(screen.getByText(/₪800/)).toBeDefined(); // cost basis
     expect(screen.getByText("Tax on profit")).toBeDefined();
-    expect(screen.getByText("Net of tax")).toBeDefined();
 
     await userEvent.click(screen.getByText("Example Corp").closest("button")!);
     expect(screen.queryByText("Cost basis")).toBeNull();
   });
 
+  it("shows a Rate row instead of Tax on profit for a fixed-rate holding", async () => {
+    mockApi({
+      holdings: [
+        holdingRow({
+          assetId: "asset-3",
+          name: "Bank Savings",
+          type: "cash",
+          quantity: null,
+          detail: {
+            status: "open",
+            costBasis: "31200",
+            profit: "700",
+            returnPct: 2.2,
+            taxOnProfit: "0",
+            annualRatePct: 4.1,
+          },
+        }),
+      ],
+    });
+
+    render(<AssetsPage />);
+    await waitFor(() => expect(screen.getByText("Bank Savings")).toBeDefined());
+
+    await userEvent.click(screen.getByText("Bank Savings").closest("button")!);
+    expect(screen.getByText("Rate")).toBeDefined();
+    expect(screen.queryByText("Tax on profit")).toBeNull();
+  });
+
   it("shows no XIRR row when xirr is null (too new or uncomputable)", async () => {
     mockApi({
-      byAsset: [
-        { assetId: "asset-1", quantity: "15", valuesByCurrency: [currencyValue({ xirr: null })] },
+      holdings: [
+        holdingRow({
+          detail: {
+            status: "open",
+            costBasis: "800",
+            profit: "200",
+            returnPct: 25,
+            taxOnProfit: "50",
+            xirr: null,
+          },
+        }),
       ],
     });
 
@@ -185,14 +201,19 @@ describe("AssetsPage", () => {
     expect(screen.queryByText("XIRR")).toBeNull();
   });
 
-  it("formats simpleReturnPct and xirr with their independent conventions (simpleReturnPct already a %, xirr a fraction)", async () => {
+  it("formats returnPct and xirr with their independent conventions (returnPct already a %, xirr a fraction)", async () => {
     mockApi({
-      byAsset: [
-        {
-          assetId: "asset-1",
-          quantity: "15",
-          valuesByCurrency: [currencyValue({ simpleReturnPct: 25, xirr: 0.1 })],
-        },
+      holdings: [
+        holdingRow({
+          detail: {
+            status: "open",
+            costBasis: "800",
+            profit: "200",
+            returnPct: 25,
+            taxOnProfit: "50",
+            xirr: 0.1,
+          },
+        }),
       ],
     });
 
@@ -200,7 +221,40 @@ describe("AssetsPage", () => {
     await waitFor(() => expect(screen.getByText("Example Corp")).toBeDefined());
     await userEvent.click(screen.getByText("Example Corp").closest("button")!);
 
-    expect(screen.getByText("25.0%")).toBeDefined(); // simpleReturnPct: 25 -> "25.0%", not "2500.0%"
+    expect(screen.getByText("25.0%")).toBeDefined(); // returnPct: 25 -> "25.0%", not "2500.0%"
     expect(screen.getByText("10.0%")).toBeDefined(); // xirr: 0.1 -> "10.0%", not "0.1%"
+  });
+
+  it("shows a closed position's realized outcome instead of blending it into current totals", async () => {
+    mockApi({
+      holdings: [
+        holdingRow({
+          assetId: "asset-4",
+          name: "Israeli TA-35 ETF",
+          type: "etf",
+          quantity: "0",
+          value: null,
+          nativeValue: null,
+          closedOn: "2026-08-15",
+          detail: {
+            status: "closed",
+            heldFrom: "2024-01",
+            heldTo: "2026-08",
+            costBasis: "22000",
+            soldFor: "25400",
+            realizedProfit: "3400",
+            realizedReturnPct: 15.5,
+          },
+        }),
+      ],
+    });
+
+    render(<AssetsPage />);
+    await waitFor(() => expect(screen.getByText("Israeli TA-35 ETF")).toBeDefined());
+
+    await userEvent.click(screen.getByText("Israeli TA-35 ETF").closest("button")!);
+    expect(screen.getByText("Held")).toBeDefined();
+    expect(screen.getByText("Sold for")).toBeDefined();
+    expect(screen.getByText(/₪25,400/)).toBeDefined();
   });
 });

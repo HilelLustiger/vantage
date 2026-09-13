@@ -2,68 +2,60 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { HoldingRow, NetWorthHistory } from "@vantage/backend/dto";
 import { DashboardPage } from "../../pages/DashboardPage";
 
-const assets = [
-  { id: "asset-1", type: "stock", name: "Existing Corp", ticker: "EX" },
-  { id: "asset-2", type: "cash", name: "Cash ILS" },
+const defaultHoldings: HoldingRow[] = [
+  {
+    assetId: "asset-1",
+    name: "Existing Corp",
+    ticker: "EX",
+    type: "stock",
+    nativeCurrency: "ILS",
+    nativeValue: "800",
+    value: "800",
+    freshness: { tier: "live", updatedSecondsAgo: 5 },
+    quantity: "10",
+    detail: { status: "open", costBasis: "500", profit: "300", returnPct: 60, taxOnProfit: "75" },
+  },
+  {
+    assetId: "asset-2",
+    name: "Cash ILS",
+    type: "cash",
+    nativeCurrency: "ILS",
+    nativeValue: "200",
+    value: "200",
+    freshness: { tier: "recent", asOfDate: "2026-01-01", daysAgo: 3 },
+    quantity: "200",
+    detail: { status: "open", costBasis: "200", profit: "0", returnPct: 0, taxOnProfit: "0" },
+  },
 ];
 
-const defaultPortfolio = {
-  userId: "u1",
-  lines: [
-    { assetId: "asset-1", quantity: "10", value: "800", currency: "ILS" },
-    { assetId: "asset-2", quantity: "200", value: "200", currency: "ILS" },
-  ],
-  costBasis: "700",
-  profit: "300",
-  simpleReturnPct: 42.9,
-  liveValue: "800",
-  documentValue: "200",
-};
-const defaultBreakdown = {
-  userId: "u1",
-  lines: [{ currency: "ILS", value: "1000", percentageOfPortfolio: 100 }],
-};
-const defaultHistory = {
-  userId: "u1",
-  points: [
-    { date: "2026-01-01", value: "900", costBasis: "700" },
-    { date: "2026-02-01", value: "1000", costBasis: "700" },
-  ],
-};
+const defaultHistory: NetWorthHistory = [
+  { date: "2026-01-01", portfolioValue: "900", costBasis: "700" },
+  { date: "2026-02-01", portfolioValue: "1000", costBasis: "700" },
+];
 
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 300, status, json: async () => body };
 }
 
 function mockApi({
-  portfolio = { ILS: { status: 200, body: defaultPortfolio } },
-  breakdown = { ILS: { status: 200, body: defaultBreakdown } },
+  holdings = { ILS: { status: 200, body: defaultHoldings } },
   history = { ILS: { status: 200, body: defaultHistory } },
 }: {
-  portfolio?: Record<string, { status: number; body: unknown }>;
-  breakdown?: Record<string, { status: number; body: unknown }>;
+  holdings?: Record<string, { status: number; body: unknown }>;
   history?: Record<string, { status: number; body: unknown }>;
 } = {}) {
   const fetchMock = vi.fn(async (path: string) => {
-    if (path === "/api/assets") return jsonResponse(assets);
-
-    let match = path.match(/^\/api\/portfolio\?currency=(\w+)$/);
+    let match = path.match(/^\/api\/holdings\?currency=(\w+)$/);
     if (match) {
-      const entry = portfolio[match[1]];
+      const entry = holdings[match[1]];
       if (!entry) throw new Error(`unexpected currency: ${match[1]}`);
       return jsonResponse(entry.body, entry.status);
     }
 
-    match = path.match(/^\/api\/portfolio\/currency-breakdown\?currency=(\w+)$/);
-    if (match) {
-      const entry = breakdown[match[1]];
-      if (!entry) throw new Error(`unexpected currency: ${match[1]}`);
-      return jsonResponse(entry.body, entry.status);
-    }
-
-    match = path.match(/^\/api\/portfolio\/history\?currency=(\w+)$/);
+    match = path.match(/^\/api\/holdings\/history\?currency=(\w+)$/);
     if (match) {
       const entry = history[match[1]];
       if (!entry) throw new Error(`unexpected currency: ${match[1]}`);
@@ -99,7 +91,7 @@ describe("DashboardPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders total net worth, the allocation legend, and the currency breakdown", async () => {
+  it("renders total net worth, the allocation legend, and the currency breakdown — all derived from holdings", async () => {
     mockApi();
     renderPage();
 
@@ -113,25 +105,21 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Net worth over time")).toBeDefined();
   });
 
-  it("re-fetches all 3 endpoints when the currency selector changes", async () => {
+  it("re-fetches holdings and history when the currency selector changes", async () => {
     const fetchMock = mockApi({
-      portfolio: {
-        ILS: { status: 200, body: defaultPortfolio },
-        USD: { status: 200, body: { userId: "u1", lines: [] } },
-      },
-      breakdown: {
-        ILS: { status: 200, body: defaultBreakdown },
-        USD: { status: 200, body: { userId: "u1", lines: [] } },
+      holdings: {
+        ILS: { status: 200, body: defaultHoldings },
+        USD: { status: 200, body: [] },
       },
       history: {
         ILS: { status: 200, body: defaultHistory },
-        USD: { status: 200, body: { userId: "u1", points: [] } },
+        USD: { status: 200, body: [] },
       },
     });
     renderPage();
 
     await waitFor(() =>
-      expect(fetchMock.mock.calls.some(([path]) => path === "/api/portfolio?currency=ILS")).toBe(
+      expect(fetchMock.mock.calls.some(([path]) => path === "/api/holdings?currency=ILS")).toBe(
         true,
       ),
     );
@@ -140,17 +128,15 @@ describe("DashboardPage", () => {
 
     await waitFor(() => {
       const paths = fetchMock.mock.calls.map(([p]) => p as string);
-      expect(paths).toContain("/api/portfolio?currency=USD");
-      expect(paths).toContain("/api/portfolio/currency-breakdown?currency=USD");
-      expect(paths).toContain("/api/portfolio/history?currency=USD");
+      expect(paths).toContain("/api/holdings?currency=USD");
+      expect(paths).toContain("/api/holdings/history?currency=USD");
     });
   });
 
   it("shows an empty state when there are no holdings", async () => {
     mockApi({
-      portfolio: { ILS: { status: 200, body: { userId: "u1", lines: [] } } },
-      breakdown: { ILS: { status: 200, body: { userId: "u1", lines: [] } } },
-      history: { ILS: { status: 200, body: { userId: "u1", points: [] } } },
+      holdings: { ILS: { status: 200, body: [] } },
+      history: { ILS: { status: 200, body: [] } },
     });
     renderPage();
 
@@ -163,7 +149,7 @@ describe("DashboardPage", () => {
     });
     renderPage();
 
-    // Total net worth (from the still-healthy /api/portfolio) still renders.
+    // Total net worth (from the still-healthy /api/holdings) still renders.
     await waitFor(() =>
       expect(screen.getByText("Total net worth").nextSibling?.textContent).toMatch(/1,000/),
     );

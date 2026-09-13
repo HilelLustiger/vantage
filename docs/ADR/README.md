@@ -26,6 +26,7 @@ when they clear the bar above; a minor/tooling-level call doesn't need one.
 | [0006](0006-cash-flow-tracking-and-return-metrics.md)    | Cash-flow tracking & return metrics — per-Asset and portfolio-level real profit                                                  |
 | [0007](0007-ingestion-pipeline-architecture.md)          | Ingestion pipeline architecture — file import, parser registry, content-driven detection                                         |
 | [0008](0008-parser-generalization-and-ai-extraction.md)  | Parser generalization & AI-assisted extraction — declarative templates, two-tier extraction, allowlist/preflight privacy design  |
+| [0009](0009-type-and-validation-layering.md)             | Type & validation layering — Zod schemas as the source of truth for wire input, colocated in `dto/`, never hand-duplicated       |
 
 ## Open Questions
 

@@ -3,19 +3,16 @@ import {
   text,
   timestamp,
   json,
-  primaryKey,
-  date,
-  boolean,
+  jsonb,
   numeric,
-  unique,
-  index,
+  date,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import type {
   AssetType,
-  CashFlowSource,
-  DocumentFeature,
-  DocumentFormat,
   DocumentStatus,
+  ExtractedLine,
+  LocallyConfirmedFields,
   ValidityCheckResult,
 } from "../dto/index.js";
 
@@ -27,8 +24,10 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+export type UserRow = typeof users.$inferSelect;
 
 // Schema required by connect-pg-simple: https://github.com/voxpelli/node-connect-pg-simple#table-schema
+// Not queried through drizzle — connect-pg-simple manages this table itself.
 export const session = pgTable("session", {
   sid: text("sid").primaryKey(),
   sess: json("sess").notNull(),
@@ -41,21 +40,22 @@ export const institutions = pgTable("institutions", {
     .$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
 });
+export type InstitutionRow = typeof institutions.$inferSelect;
 
 export const accounts = pgTable("accounts", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
   institutionId: text("institution_id")
     .notNull()
     .references(() => institutions.id),
-  name: text("name").notNull(),
 });
+export type AccountRow = typeof accounts.$inferSelect;
 
-// An Account can have several owning Users (joint), a User can own several
-// Accounts. Mirrors dto's Account.ownerUserIds.
-export const accountUsers = pgTable(
-  "account_users",
+// Many-to-many: Account.ownerUserIds is an array in the DTO.
+export const accountOwners = pgTable(
+  "account_owners",
   {
     accountId: text("account_id")
       .notNull()
@@ -66,20 +66,24 @@ export const accountUsers = pgTable(
   },
   (t) => ({ pk: primaryKey({ columns: [t.accountId, t.userId] }) }),
 );
+export type AccountOwnerRow = typeof accountOwners.$inferSelect;
 
 export const assets = pgTable("assets", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  type: text("type").notNull().$type<AssetType>(),
+  type: text("type").$type<AssetType>().notNull(),
   name: text("name").notNull(),
   ticker: text("ticker"),
   isin: text("isin"),
-  // TASE (or equivalent exchange) security number — a real Asset-matching
-  // key alongside ticker/isin, see ADR-0024.
   securityNumber: text("security_number"),
 });
+export type AssetRow = typeof assets.$inferSelect;
 
+// One row per uploaded statement. `asOfDate`/`parsedLines`/`locallyConfirmed`/
+// `validityFailedChecks` are populated once parsing (or the privacy
+// preflight check) has run — null until then. DocumentReview's `reason` is
+// derived from which of these is populated, not stored separately.
 export const documents = pgTable("documents", {
   id: text("id")
     .primaryKey()
@@ -87,134 +91,65 @@ export const documents = pgTable("documents", {
   accountId: text("account_id")
     .notNull()
     .references(() => accounts.id),
-  status: text("status").notNull().$type<DocumentStatus>(),
-  checksum: text("checksum").notNull(),
-  format: text("format").notNull().$type<DocumentFormat>().default("pdf"),
-  feature: text("feature").notNull().$type<DocumentFeature>().default("investments"),
-  dateRangeStart: date("date_range_start", { mode: "string" }),
-  dateRangeEnd: date("date_range_end", { mode: "string" }),
+  status: text("status").$type<DocumentStatus>().notNull(),
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
-  // Raw parser-service output on a successful parse — internal only, never
-  // exposed on the Document wire type (see toDocument()). #20/#21 consume
-  // this to drive processing -> needs_review/committed.
-  parsedData: json("parsed_data"),
-  // The parser service's `reason` string on a failed parse. Short and
-  // non-PII, safe to expose on Document (unlike parsedData).
   failureReason: text("failure_reason"),
-  // Asset match results from #20 — a (string | null)[], positionally
-  // aligned with [...parsedData.holdings, ...flow-kind transactions]
-  // (ADR-0023/#38). Internal only, same reasoning as parsedData; #21/#10
-  // consume this. Column name predates #38's broadened alignment.
-  resolvedHoldings: json("resolved_holdings"),
-  // Which ExtractionEngine checks failed, when needs_review was reached via
-  // ADR-0026's validity-failure path (as opposed to ADR-0010's asset-
-  // resolution path, which has no failed checks). Exposed on the Document
-  // wire type, unlike parsedData/resolvedHoldings — small and structured,
-  // same reasoning as failureReason. parsedData carries the raw values for
-  // this same case (ValidityFailure.values), no separate column needed.
-  validityFailedChecks: json("validity_failed_checks").$type<ValidityCheckResult[]>(),
+  // Identifies a re-upload of the same file, for DocumentStatus "duplicate".
+  checksum: text("checksum").notNull(),
+  // The statement's own stated date — distinct from uploadedAt, and what a
+  // committed Document's Holdings are "as of" for Freshness purposes.
+  asOfDate: date("as_of_date"),
+  parsedLines: jsonb("parsed_lines").$type<ExtractedLine[]>(),
+  locallyConfirmed: jsonb("locally_confirmed").$type<LocallyConfirmedFields>(),
+  validityFailedChecks: jsonb("validity_failed_checks").$type<ValidityCheckResult[]>(),
 });
+export type DocumentRow = typeof documents.$inferSelect;
+export type DocumentInsert = typeof documents.$inferInsert;
 
-// See docs/ADR/0009-snapshot-immutability-and-supersede.md: immutable once
-// created, a re-import for the same Account+date supersedes rather than
-// overwrites. supersededBySnapshotId has no .references() — it's a nullable
-// self-reference to a row that doesn't exist yet at insert time; enforced
-// at the app layer (ingest/snapshotCreation.ts) instead of a deferred FK.
-export const snapshots = pgTable("snapshots", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  accountId: text("account_id")
-    .notNull()
-    .references(() => accounts.id),
-  documentId: text("document_id")
-    .notNull()
-    .references(() => documents.id),
-  asOfDate: date("as_of_date", { mode: "string" }).notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  supersededBySnapshotId: text("superseded_by_snapshot_id"),
-});
-
-// See docs/ADR/0012-multi-currency-store-original-convert-at-read.md:
-// value stored in whatever currency was parsed, never converted at write
-// time. quantity/value use `numeric`, not `text` — a real Postgres numeric
-// type, while drizzle's default mode still returns a string, matching
-// Holding.quantity/value's dto shape exactly.
+// What one Document stated: this Asset's quantity/value as of that
+// Document's asOfDate. HoldingRow's current value/freshness/history are all
+// derived by reading across a given Account+Asset's Documents.
 export const holdings = pgTable("holdings", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  snapshotId: text("snapshot_id")
+  documentId: text("document_id")
     .notNull()
-    .references(() => snapshots.id),
+    .references(() => documents.id),
   assetId: text("asset_id")
     .notNull()
     .references(() => assets.id),
   quantity: numeric("quantity").notNull(),
   value: numeric("value").notNull(),
   currency: text("currency").notNull(),
-  // Only ever populated when the parser provides one directly (Excellence
-  // today) — see ADR-0023/#39: diffing this against the previous Snapshot's
-  // Holding for the same Asset is how a cost-basis-delta cash_flow gets
-  // derived when there's no real per-transaction data for the period.
-  purchaseCostIls: numeric("purchase_cost_ils"),
 });
+// Named HoldingTableRow, not HoldingRow — that name is already the DTO's
+// (dto/holdings.ts) for the Assets table's fully-resolved row; this is the
+// raw DB row long before it's assembled into one.
+export type HoldingTableRow = typeof holdings.$inferSelect;
 
-// See docs/ADR/0023-per-asset-cash-flow-tracking-and-return-metrics.md:
-// a dated cash-flow event for one Asset, aggregated cross-account at read
-// time (not partitioned by account) — accountId/documentId are kept here
-// purely for traceability and dedup, not as a query boundary. Append-only,
-// same immutability precedent as Snapshot (ADR-0009) — corrections append
-// new rows, nothing is ever rewritten. Dedup (composite natural key: date
-// + assetId + kind + amount + runningBalanceAfter) is enforced at the
-// application layer, not a DB constraint — runningBalanceAfter is
-// nullable, and SQL UNIQUE never treats NULLs as equal, so a DB
-// constraint would silently miss duplicates for exactly the rows most
-// likely to lack it (derived_period_aggregate/derived_cost_basis_delta).
-export const cashFlows = pgTable(
-  "cash_flows",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    accountId: text("account_id")
-      .notNull()
-      .references(() => accounts.id),
-    assetId: text("asset_id")
-      .notNull()
-      .references(() => assets.id),
-    documentId: text("document_id")
-      .notNull()
-      .references(() => documents.id),
-    date: date("date", { mode: "string" }).notNull(),
-    // Signed: positive = contributed/bought, negative = withdrawn/sold —
-    // flipped to finance convention only at XIRR computation time.
-    amount: numeric("amount").notNull(),
-    currency: text("currency").notNull(),
-    kind: text("kind").notNull(),
-    source: text("source").notNull().$type<CashFlowSource>(),
-    runningBalanceAfter: numeric("running_balance_after"),
-  },
-  (t) => ({
-    assetDateIdx: index("cash_flows_asset_date_idx").on(t.assetId, t.date),
-  }),
-);
+export type TransactionKind = "buy" | "sell" | "deposit" | "withdrawal";
 
-// See docs/ADR/0012-multi-currency-store-original-convert-at-read.md: a
-// local cache of fetched Frankfurter rates, keyed by the *requested* date
-// (not whatever nearby trading day Frankfurter substitutes internally) so
-// repeated lookups for the same date are predictable and hit the cache.
-// Purely backend infrastructure — never part of dto/the wire.
-export const fxRates = pgTable(
-  "fx_rates",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    date: date("date", { mode: "string" }).notNull(),
-    fromCurrency: text("from_currency").notNull(),
-    toCurrency: text("to_currency").notNull(),
-    rate: numeric("rate").notNull(),
-  },
-  (t) => ({ unique: unique().on(t.date, t.fromCurrency, t.toCurrency) }),
-);
+// An internal ledger, never exposed to web directly — the only way to
+// compute OpenHoldingDetail.xirr (money-weighted return needs dated cash
+// flows, not just point-in-time snapshots) and ClosedHoldingDetail's
+// heldFrom/heldTo/soldFor/realizedProfit (a specific sale event, not
+// derivable from Holdings alone).
+export const transactions = pgTable("transactions", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  accountId: text("account_id")
+    .notNull()
+    .references(() => accounts.id),
+  assetId: text("asset_id")
+    .notNull()
+    .references(() => assets.id),
+  occurredAt: date("occurred_at").notNull(),
+  quantityDelta: numeric("quantity_delta").notNull(),
+  amount: numeric("amount").notNull(),
+  currency: text("currency").notNull(),
+  kind: text("kind").$type<TransactionKind>().notNull(),
+});
+export type TransactionRow = typeof transactions.$inferSelect;
+export type TransactionInsert = typeof transactions.$inferInsert;

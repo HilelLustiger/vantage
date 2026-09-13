@@ -2,16 +2,14 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type {
-  Asset,
   AssetType,
-  CurrencyBreakdown,
-  Portfolio,
-  PortfolioHistory,
+  HoldingRow,
+  NetWorthHistory,
+  OpenHoldingDetail,
 } from "@vantage/backend/dto";
 import { Card } from "../components/Card";
 import { ValueCostBasisChart } from "../components/ValueCostBasisChart";
-import { assetsApi } from "../api/assets";
-import { portfolioApi } from "../api/portfolio";
+import { holdingsApi } from "../api/holdings";
 import { ApiError } from "../api/client";
 import { formatMoney, formatPct, signColor } from "../utils/format";
 
@@ -24,6 +22,11 @@ const TYPE_COLORS: Record<AssetType, string> = {
   bond: "#f59e0b",
   cash: "#9ca3af",
 };
+
+// A handful of distinct colors for the "By currency" bar — cycled by
+// insertion order since the set of currencies actually held is open-ended,
+// unlike asset type which has a fixed, known palette above.
+const CURRENCY_COLORS = ["#10b981", "#0ea5e9", "#8b5cf6", "#f59e0b", "#9ca3af"];
 
 interface FetchState<T> {
   data: T | null;
@@ -61,41 +64,64 @@ function ErrorBanner({ message }: { message: string }) {
 
 export function DashboardPage() {
   const [currency, setCurrency] = useState("ILS");
-  const [assets, setAssets] = useState<Asset[]>([]);
 
-  useEffect(() => {
-    assetsApi.list().then(setAssets);
-  }, []);
+  const holdings = useFetchState<HoldingRow[]>(() => holdingsApi.list(currency), [currency]);
+  const history = useFetchState<NetWorthHistory>(() => holdingsApi.history(currency), [currency]);
 
-  const portfolio = useFetchState<Portfolio>(() => portfolioApi.get(currency), [currency]);
-  const breakdown = useFetchState<CurrencyBreakdown>(
-    () => portfolioApi.currencyBreakdown(currency),
-    [currency],
+  // Every card below is a group-by/sum over the same holdings the Assets
+  // table fetches — see the comment on HoldingRow in dto/holdings.ts for why
+  // there's no separate portfolio-summary query.
+  const openHoldings = (holdings.data ?? []).filter(
+    (h): h is HoldingRow & { detail: OpenHoldingDetail } => h.detail.status === "open",
   );
-  const history = useFetchState<PortfolioHistory>(() => portfolioApi.history(currency), [currency]);
+  const total = openHoldings.reduce((sum, h) => sum + Number(h.value ?? 0), 0);
 
-  const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
-  const lines = portfolio.data?.lines ?? [];
-  const total = lines.reduce((sum, line) => sum + Number(line.value), 0);
+  const liveHoldings = openHoldings.filter((h) => h.freshness.tier === "live");
+  const liveValue = liveHoldings.reduce((sum, h) => sum + Number(h.value ?? 0), 0);
+
+  const realProfit = openHoldings.reduce((sum, h) => sum + Number(h.detail.profit), 0);
+  // Simple aggregate return — profit over cost basis across every open
+  // holding, in the same display currency as `total`.
+  const totalCostBasis = openHoldings.reduce((sum, h) => sum + Number(h.detail.costBasis), 0);
+  const realProfitPct = totalCostBasis > 0 ? (realProfit / totalCostBasis) * 100 : null;
 
   const byType = new Map<AssetType, number>();
-  for (const line of lines) {
-    const type = assetsById.get(line.assetId)?.type ?? "cash";
-    byType.set(type, (byType.get(type) ?? 0) + Number(line.value));
+  for (const h of openHoldings) {
+    byType.set(h.type, (byType.get(h.type) ?? 0) + Number(h.value ?? 0));
   }
   const allocation = [...byType.entries()]
     .map(([type, value]) => ({ type, value }))
     .sort((a, b) => b.value - a.value);
 
-  const showEmptyState =
-    !portfolio.isLoading && !portfolio.error && portfolio.data !== null && lines.length === 0;
+  // Native-currency buckets — nativeValue/nativeCurrency, not the
+  // display-converted `value`, since grouping by currency only means
+  // something before conversion collapses everything into one.
+  const byCurrency = new Map<string, number>();
+  for (const h of openHoldings) {
+    byCurrency.set(
+      h.nativeCurrency,
+      (byCurrency.get(h.nativeCurrency) ?? 0) + Number(h.nativeValue ?? 0),
+    );
+  }
+  const currencyBreakdown = [...byCurrency.entries()].map(([curr, nativeValue]) => {
+    const displayValue = openHoldings
+      .filter((h) => h.nativeCurrency === curr)
+      .reduce((sum, h) => sum + Number(h.value ?? 0), 0);
+    return {
+      currency: curr,
+      nativeValue,
+      percentageOfTotal: total > 0 ? (displayValue / total) * 100 : 0,
+    };
+  });
 
-  const historyPoints = (history.data?.points ?? []).map((p) => ({
+  const showEmptyState = !holdings.isLoading && !holdings.error && holdings.data?.length === 0;
+
+  const historyPoints = (history.data ?? []).map((p) => ({
     date: p.date,
-    value: Number(p.value),
+    value: Number(p.portfolioValue),
     costBasis: Number(p.costBasis),
+    tooltipLabel: historyTooltipLabel(p.event),
   }));
-  const liveValue = Number(portfolio.data?.liveValue ?? 0);
   const chartLiveNow = liveValue > 0 ? { value: total } : undefined;
 
   return (
@@ -128,19 +154,22 @@ export function DashboardPage() {
 
       {!showEmptyState && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-[1.2fr_1fr_1fr]">
             <NetWorthCard
               total={total}
               currency={currency}
-              portfolio={portfolio.data}
-              breakdown={breakdown.data}
-              error={portfolio.error ?? breakdown.error}
+              liveValue={liveValue}
+              realProfit={realProfit}
+              realProfitPct={realProfitPct}
+              currencyBreakdown={currencyBreakdown}
+              error={holdings.error}
+              hasData={holdings.data !== null}
             />
 
             <Card>
               <p className="mb-2 text-sm font-medium text-gray-500">Allocation by type</p>
-              {portfolio.error ? (
-                <ErrorBanner message={portfolio.error} />
+              {holdings.error ? (
+                <ErrorBanner message={holdings.error} />
               ) : allocation.length === 0 ? (
                 <p className="text-sm text-gray-400">—</p>
               ) : (
@@ -177,6 +206,8 @@ export function DashboardPage() {
                 </>
               )}
             </Card>
+
+            <SectorGeographyCard />
           </div>
 
           <Card>
@@ -213,22 +244,89 @@ export function DashboardPage() {
   );
 }
 
+function historyTooltipLabel(event: NetWorthHistory[number]["event"]) {
+  if (!event) return "Statement imported";
+  if (event.kind === "statement_imported") {
+    return event.institutionName
+      ? `Statement imported · ${event.institutionName}`
+      : "Statement imported";
+  }
+  const verb = event.kind === "purchase" ? "Purchased" : "Sold";
+  return event.assetName ? `${verb} ${event.quantity ?? ""} ${event.assetName}`.trim() : verb;
+}
+
+// Placeholder until the backend exposes real sector/geography classification
+// (see SectorAllocation in dto/dashboard.ts) — where holdings are actually
+// invested, not their Account currency. Frontend-only fixture, not derived
+// from any real data yet.
+const MOCK_SECTOR_GEOGRAPHY = [
+  { label: "Technology (US)", percentageOfPortfolio: 34, color: "#0ea5e9" },
+  { label: "Israeli gov't & fixed income", percentageOfPortfolio: 22, color: "#f59e0b" },
+  { label: "Financials", percentageOfPortfolio: 18, color: "#8b5cf6" },
+  { label: "Cash & other", percentageOfPortfolio: 17, color: "#9ca3af" },
+  { label: "Healthcare", percentageOfPortfolio: 9, color: "#10b981" },
+];
+
+function SectorGeographyCard() {
+  return (
+    <Card>
+      <p className="mb-0.5 text-sm font-medium text-gray-500">Sector &amp; geography</p>
+      <p className="mb-2 text-xs text-gray-400">
+        Where holdings are actually invested, not their Account currency.
+      </p>
+      <ResponsiveContainer width="100%" height={160}>
+        <PieChart>
+          <Pie
+            data={MOCK_SECTOR_GEOGRAPHY}
+            dataKey="percentageOfPortfolio"
+            nameKey="label"
+            innerRadius={35}
+            outerRadius={70}
+          >
+            {MOCK_SECTOR_GEOGRAPHY.map((entry) => (
+              <Cell key={entry.label} fill={entry.color} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value: unknown) => `${value}%`} />
+        </PieChart>
+      </ResponsiveContainer>
+      <ul className="mt-2 space-y-1 text-xs text-gray-600">
+        {MOCK_SECTOR_GEOGRAPHY.map((entry) => (
+          <li key={entry.label} className="flex items-center gap-2">
+            <span
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: entry.color }}
+            />
+            {entry.label} — {entry.percentageOfPortfolio}%
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 // Total net worth, merged with the live/document freshness split and the
-// native-currency breakdown (ADR 0005), plus portfolio-level real profit
-// (ADR 0006) — one card, since the breakdown/freshness/profit are all just
-// context on the one headline total, not independent facts.
+// native-currency breakdown, plus portfolio-level real profit — one card,
+// since the breakdown/freshness/profit are all just context on the one
+// headline total, not independent facts.
 function NetWorthCard({
   total,
   currency,
-  portfolio,
-  breakdown,
+  liveValue,
+  realProfit,
+  realProfitPct,
+  currencyBreakdown,
   error,
+  hasData,
 }: {
   total: number;
   currency: string;
-  portfolio: Portfolio | null;
-  breakdown: CurrencyBreakdown | null;
+  liveValue: number;
+  realProfit: number;
+  realProfitPct: number | null;
+  currencyBreakdown: Array<{ currency: string; nativeValue: number; percentageOfTotal: number }>;
   error: string | null;
+  hasData: boolean;
 }) {
   if (error) {
     return (
@@ -241,20 +339,17 @@ function NetWorthCard({
     );
   }
 
-  const liveValue = Number(portfolio?.liveValue ?? 0);
   const livePct = total > 0 ? (liveValue / total) * 100 : 0;
   const documentPct = 100 - livePct;
-  const profit = portfolio ? Number(portfolio.profit) : 0;
-  const simpleReturnPct = portfolio?.simpleReturnPct ?? null;
 
   return (
     <Card>
       <p className="text-sm font-medium text-gray-500">Total net worth</p>
       <p className="mb-3 mt-1 text-3xl font-semibold text-gray-900">
-        {portfolio ? formatMoney(total, currency) : "—"}
+        {hasData ? formatMoney(total, currency) : "—"}
       </p>
 
-      {portfolio && total > 0 && (
+      {hasData && total > 0 && (
         <>
           <div className="flex h-2 overflow-hidden rounded-full bg-gray-100">
             <div className="bg-emerald-500" style={{ width: `${livePct}%` }} />
@@ -282,14 +377,14 @@ function NetWorthCard({
         </>
       )}
 
-      {portfolio && (
+      {hasData && (
         <div className="mt-3.5 border-t border-gray-100 pt-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-500">Real profit</span>
-            <span className={`text-sm font-semibold ${signColor(profit)}`}>
-              {formatMoney(profit, currency)}
-              {simpleReturnPct !== null &&
-                ` · ${profit >= 0 ? "+" : ""}${formatPct(simpleReturnPct)}`}
+            <span className={`text-sm font-semibold ${signColor(realProfit)}`}>
+              {formatMoney(realProfit, currency)}
+              {realProfitPct !== null &&
+                ` · ${realProfit >= 0 ? "+" : ""}${formatPct(realProfitPct)}`}
             </span>
           </div>
           <p className="mt-1.5 text-xs leading-relaxed text-gray-400">
@@ -299,26 +394,29 @@ function NetWorthCard({
         </div>
       )}
 
-      {breakdown && breakdown.lines.length > 0 && (
+      {currencyBreakdown.length > 0 && (
         <div className="mt-3.5 border-t border-gray-100 pt-3">
           <span className="text-sm font-medium text-gray-500">By currency</span>
           <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-gray-100">
-            {breakdown.lines.map((line, i) => (
+            {currencyBreakdown.map((line, i) => (
               <div
                 key={line.currency}
-                className={i % 2 === 0 ? "bg-emerald-500" : "bg-sky-500"}
-                style={{ width: `${line.percentageOfPortfolio}%` }}
+                style={{
+                  width: `${line.percentageOfTotal}%`,
+                  backgroundColor: CURRENCY_COLORS[i % CURRENCY_COLORS.length],
+                }}
               />
             ))}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3.5 text-xs text-gray-500">
-            {breakdown.lines.map((line, i) => (
+            {currencyBreakdown.map((line, i) => (
               <span key={line.currency} className="flex items-center gap-1.5">
                 <span
-                  className={`inline-block h-1.5 w-1.5 rounded-full ${i % 2 === 0 ? "bg-emerald-500" : "bg-sky-500"}`}
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: CURRENCY_COLORS[i % CURRENCY_COLORS.length] }}
                 />
-                {line.currency} · {formatMoney(Number(line.value), line.currency)} (
-                {line.percentageOfPortfolio.toFixed(1)}%)
+                {line.currency} · {formatMoney(line.nativeValue, line.currency)} (
+                {line.percentageOfTotal.toFixed(1)}%)
               </span>
             ))}
           </div>

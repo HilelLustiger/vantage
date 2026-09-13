@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "@vantage/backend/app";
-import { createUser } from "@vantage/backend/db/users";
+import { createUser } from "@vantage/backend/repositories/users";
 import { hashPassword } from "@vantage/backend/password";
 
 // Exercises the real HTTP surface (institutions/accounts/assets) end-to-end
@@ -18,17 +18,28 @@ async function loginAsNewUser(app: ReturnType<typeof createApp>) {
 }
 
 describe("institutions", () => {
-  it("creates and lists institutions", async () => {
+  it("has no create endpoint — only created inline via POST /api/accounts", async () => {
     const app = createApp();
     const { agent } = await loginAsNewUser(app);
 
-    const created = await agent
-      .post("/api/institutions")
-      .send({ name: `Bank ${randomUUID()}` })
+    await agent.post("/api/institutions").send({ name: "Should not exist" }).expect(404);
+  });
+
+  it("lists an institution created inline by an account", async () => {
+    const app = createApp();
+    const { agent } = await loginAsNewUser(app);
+    const name = `Bank ${randomUUID()}`;
+
+    const account = await agent
+      .post("/api/accounts")
+      .send({ name: "Test Account", newInstitutionName: name })
       .expect(201);
 
     const list = await agent.get("/api/institutions").expect(200);
-    expect(list.body.map((i: { id: string }) => i.id)).toContain(created.body.id);
+    expect(list.body.map((i: { id: string }) => i.id)).toContain(account.body.institutionId);
+    expect(list.body.find((i: { id: string }) => i.id === account.body.institutionId).name).toBe(
+      name,
+    );
   });
 
   it("rejects unauthenticated requests", async () => {
@@ -58,61 +69,68 @@ describe("assets", () => {
 });
 
 describe("accounts", () => {
-  it("is visible to an explicit joint owner, not to an unrelated user", async () => {
+  it("is visible to every authenticated user — single shared household, not per-owner scoped", async () => {
     const app = createApp();
-    const { agent: owner1, userId: owner1Id } = await loginAsNewUser(app);
-    const { userId: owner2Id } = await loginAsNewUser(app);
-    const { agent: outsider } = await loginAsNewUser(app);
+    const { agent: creator } = await loginAsNewUser(app);
+    const { agent: otherUser } = await loginAsNewUser(app);
 
-    const institution = await owner1
-      .post("/api/institutions")
-      .send({ name: `Bank ${randomUUID()}` })
-      .expect(201);
-
-    const account = await owner1
+    const account = await creator
       .post("/api/accounts")
-      .send({
-        institutionId: institution.body.id,
-        name: "Joint Brokerage",
-        ownerUserIds: [owner2Id],
-      })
+      .send({ name: "Joint Brokerage", newInstitutionName: `Bank ${randomUUID()}` })
       .expect(201);
-    expect(new Set(account.body.ownerUserIds)).toEqual(new Set([owner1Id, owner2Id]));
 
-    const owner1List = await owner1.get("/api/accounts").expect(200);
-    expect(owner1List.body.map((a: { id: string }) => a.id)).toContain(account.body.id);
-
-    const outsiderList = await outsider.get("/api/accounts").expect(200);
-    expect(outsiderList.body.map((a: { id: string }) => a.id)).not.toContain(account.body.id);
-
-    await outsider.get(`/api/accounts/${account.body.id}`).expect(404);
-    await owner1.get(`/api/accounts/${account.body.id}`).expect(200);
+    const otherUserList = await otherUser.get("/api/accounts").expect(200);
+    expect(otherUserList.body.map((a: { id: string }) => a.id)).toContain(account.body.id);
   });
 
-  it("auto-includes the creator when ownerUserIds is omitted", async () => {
+  it("creates an account against an existing institution", async () => {
+    const app = createApp();
+    const { agent } = await loginAsNewUser(app);
+
+    const first = await agent
+      .post("/api/accounts")
+      .send({ name: "First Account", newInstitutionName: `Bank ${randomUUID()}` })
+      .expect(201);
+
+    const second = await agent
+      .post("/api/accounts")
+      .send({ name: "Second Account", institutionId: first.body.institutionId })
+      .expect(201);
+
+    expect(second.body.institutionId).toBe(first.body.institutionId);
+    expect(second.body.institutionName).toBe(first.body.institutionName);
+  });
+
+  it("records the given ownerUserIds", async () => {
     const app = createApp();
     const { agent, userId } = await loginAsNewUser(app);
 
-    const institution = await agent
-      .post("/api/institutions")
-      .send({ name: `Bank ${randomUUID()}` })
-      .expect(201);
-
     const account = await agent
       .post("/api/accounts")
-      .send({ institutionId: institution.body.id, name: "Solo Brokerage" })
+      .send({
+        name: "Solo Brokerage",
+        newInstitutionName: `Bank ${randomUUID()}`,
+        ownerUserIds: [userId],
+      })
       .expect(201);
 
     expect(account.body.ownerUserIds).toEqual([userId]);
   });
 
-  it("rejects an account for a non-existent institution", async () => {
+  it("rejects a request with neither institutionId nor newInstitutionName", async () => {
+    const app = createApp();
+    const { agent } = await loginAsNewUser(app);
+
+    await agent.post("/api/accounts").send({ name: "Ghost Account" }).expect(400);
+  });
+
+  it("rejects an account for a non-existent institutionId", async () => {
     const app = createApp();
     const { agent } = await loginAsNewUser(app);
 
     await agent
       .post("/api/accounts")
-      .send({ institutionId: randomUUID(), name: "Ghost Account" })
+      .send({ name: "Ghost Account", institutionId: randomUUID() })
       .expect(400);
   });
 

@@ -1,6 +1,7 @@
-import type { User } from "@vantage/backend/dto";
+import type { HouseholdUser } from "@vantage/backend/dto";
 import { apiClient } from "./client";
 
+// The household's other members, for the "Add account" owners picker.
 export const usersApi = {
-  list: () => apiClient.get<Pick<User, "id" | "email">[]>("/api/users"),
+  list: () => apiClient.get<HouseholdUser[]>("/api/users"),
 };

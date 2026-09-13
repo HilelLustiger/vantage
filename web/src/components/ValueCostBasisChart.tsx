@@ -5,10 +5,18 @@
 // line only moves there, never continuously — see ADR 0006's "stays
 // stepped, never a continuous line" decision.
 
+import { useState } from "react";
+
 interface Point {
   date: string;
   value: number;
   costBasis: number;
+  /** Free-text annotation shown in this point's hover tooltip, alongside
+   * its date/value/cost-basis — supplied by callers with enough domain
+   * context to say something meaningful (the Dashboard knows every point
+   * is a Snapshot import; an Asset's own history doesn't yet carry real
+   * per-event data, so it's omitted there for now). */
+  tooltipLabel?: string;
 }
 
 interface Coord {
@@ -46,6 +54,19 @@ function formatShortDate(isoDate: string) {
   });
 }
 
+function formatLongDate(isoDate: string) {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function formatNumber(value: number) {
+  return Math.round(value).toLocaleString();
+}
+
 export function ValueCostBasisChart({
   points,
   liveNow,
@@ -58,6 +79,8 @@ export function ValueCostBasisChart({
   liveNow?: { value: number };
   height?: number;
 }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
   if (points.length === 0) {
     return <p className="text-sm text-gray-400">—</p>;
   }
@@ -139,6 +162,19 @@ export function ValueCostBasisChart({
       {valueCoords.map((c, i) => (
         <circle key={i} cx={c.x} cy={c.y} r={4} fill="#10b981" />
       ))}
+      {/* Larger, invisible hit targets — the visible 4px dots above are too
+       * small to hover reliably, especially with few points spread wide. */}
+      {valueCoords.map((c, i) => (
+        <circle
+          key={i}
+          cx={c.x}
+          cy={c.y}
+          r={12}
+          fill="transparent"
+          onMouseEnter={() => setHoveredIndex(i)}
+          onMouseLeave={() => setHoveredIndex((current) => (current === i ? null : current))}
+        />
+      ))}
 
       {liveCoord && (
         <>
@@ -177,6 +213,52 @@ export function ValueCostBasisChart({
           {formatShortDate(points[i].date)}
         </text>
       ))}
+
+      {hoveredIndex !== null && (
+        <PointTooltip point={points[hoveredIndex]} anchor={valueCoords[hoveredIndex]} />
+      )}
     </svg>
+  );
+}
+
+function PointTooltip({ point, anchor }: { point: Point; anchor: Coord }) {
+  const lines = [
+    formatLongDate(point.date),
+    `Value: ${formatNumber(point.value)}`,
+    `Cost basis: ${formatNumber(point.costBasis)}`,
+    ...(point.tooltipLabel ? [point.tooltipLabel] : []),
+  ];
+
+  const boxWidth = 190;
+  const lineHeight = 15;
+  const boxHeight = lines.length * lineHeight + 12;
+  const x = Math.min(Math.max(anchor.x - boxWidth / 2, 4), WIDTH - boxWidth - 4);
+  const wantsAbove = anchor.y - boxHeight - 14 >= 0;
+  const y = wantsAbove ? anchor.y - boxHeight - 10 : anchor.y + 14;
+
+  return (
+    <g pointerEvents="none">
+      <rect
+        x={x}
+        y={y}
+        width={boxWidth}
+        height={boxHeight}
+        rx={6}
+        fill="#111827"
+        fillOpacity={0.92}
+      />
+      {lines.map((line, i) => (
+        <text
+          key={i}
+          x={x + 10}
+          y={y + 18 + i * lineHeight}
+          fontSize={11}
+          fontWeight={i === 0 ? 600 : 400}
+          fill="#ffffff"
+        >
+          {line}
+        </text>
+      ))}
+    </g>
   );
 }

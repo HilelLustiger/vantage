@@ -5,9 +5,9 @@
   "type": "module",
   "exports": {
     "./app": "./src/app.ts",
-    "./db/users": "./src/db/users.ts",
+    "./repositories/users": "./src/repositories/users.ts",
     "./db/client": "./src/db/client.ts",
-    "./password": "./src/routes/password.ts",
+    "./password": "./src/controllers/password.ts",
     "./dto": "./src/dto/index.ts"
   },
   "scripts": {
