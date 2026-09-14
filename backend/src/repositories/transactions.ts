@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../db/client.js";
+import { db, type DbExecutor } from "../db/client.js";
 import { transactions, type TransactionInsert, type TransactionRow } from "../db/schema.js";
 
 export async function listTransactionsForAsset(
@@ -33,7 +33,10 @@ export async function listAllTransactions(): Promise<TransactionRow[]> {
   return db.select().from(transactions).orderBy(transactions.occurredAt);
 }
 
-export async function insertTransaction(input: TransactionInsert): Promise<TransactionRow> {
-  const [transaction] = await db.insert(transactions).values(input).returning();
+export async function insertTransaction(
+  input: TransactionInsert,
+  executor: DbExecutor = db,
+): Promise<TransactionRow> {
+  const [transaction] = await executor.insert(transactions).values(input).returning();
   return transaction;
 }

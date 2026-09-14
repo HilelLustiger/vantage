@@ -146,7 +146,7 @@ export function DashboardPage() {
         <Card className="text-center text-sm text-gray-500">
           No holdings yet —{" "}
           <Link to="/import" className="font-medium text-emerald-700 hover:text-emerald-800">
-            import a statement
+            import a document
           </Link>{" "}
           to see your portfolio.
         </Card>

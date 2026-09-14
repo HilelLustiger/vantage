@@ -6,10 +6,8 @@ import { assetsRouter } from "./controllers/assets.js";
 import { accountsRouter } from "./controllers/accounts.js";
 import { usersRouter } from "./controllers/users.js";
 import { holdingsRouter } from "./controllers/holdings.js";
+import { documentsRouter } from "./controllers/documents.js";
 
-// Documents (upload/review/resolve) isn't wired up yet — that flow needs
-// its own design pass (parsing/ingest pipeline) before it can be built
-// against web/src/api/documents.ts's contract.
 export function createApp() {
   const app = express();
 
@@ -26,6 +24,7 @@ export function createApp() {
   app.use("/api/accounts", accountsRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/holdings", holdingsRouter);
+  app.use("/api/documents", documentsRouter);
 
   return app;
 }

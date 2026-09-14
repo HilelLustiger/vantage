@@ -12,13 +12,21 @@ const reviewPayload = {
   lines: [
     {
       index: 0,
+      kind: "holding",
       assetName: "Already Matched Fund",
       quantity: "5",
       value: "500",
       currency: "ILS",
       resolvedAssetId: "asset-1",
     },
-    { index: 1, assetName: "Unrecognized Fund", quantity: "10", value: "1000", currency: "ILS" },
+    {
+      index: 1,
+      kind: "holding",
+      assetName: "Unrecognized Fund",
+      quantity: "10",
+      value: "1000",
+      currency: "ILS",
+    },
   ],
 };
 
@@ -117,7 +125,7 @@ describe("ReviewDocumentPage", () => {
       ([path]) => path === `/api/documents/${documentId}/resolve`,
     )!;
     const body = JSON.parse((resolveCall[1] as RequestInit).body as string);
-    expect(body.resolutions).toEqual([{ index: 1, assetId: "asset-1" }]);
+    expect(body.resolutions).toEqual([{ index: 1, kind: "holding", assetId: "asset-1" }]);
   });
 
   it("submits a create-new resolution and shows the failure reason if the commit fails", async () => {

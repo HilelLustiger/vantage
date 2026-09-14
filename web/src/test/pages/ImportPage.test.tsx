@@ -102,7 +102,7 @@ describe("ImportPage", () => {
     await waitFor(() => expect(screen.getByText("committed")).toBeDefined());
 
     const file = pdfFile("statement.pdf");
-    await userEvent.upload(screen.getByLabelText("Upload statements"), file);
+    await userEvent.upload(screen.getByLabelText("Upload documents"), file);
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -128,7 +128,7 @@ describe("ImportPage", () => {
     render(<ImportPage />);
     await waitFor(() => expect(screen.getByText("committed")).toBeDefined());
 
-    await userEvent.upload(screen.getByLabelText("Upload statements"), pdfFile("bad.pdf"));
+    await userEvent.upload(screen.getByLabelText("Upload documents"), pdfFile("bad.pdf"));
 
     await waitFor(() => expect(screen.getByText("a PDF file is required")).toBeDefined());
   });

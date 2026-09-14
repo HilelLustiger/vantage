@@ -119,7 +119,7 @@ export function ImportPage() {
         >
           <UploadCloud className="mb-2 text-gray-400" size={28} />
           <p className="text-sm text-gray-600">
-            Drag statements here, or <span className="font-medium text-emerald-700">browse</span>
+            Drag documents here, or <span className="font-medium text-emerald-700">browse</span>
           </p>
           <p className="mt-1 text-xs text-gray-400">PDF only, multiple files at once</p>
           <input
@@ -127,7 +127,7 @@ export function ImportPage() {
             type="file"
             multiple
             accept="application/pdf"
-            aria-label="Upload statements"
+            aria-label="Upload documents"
             className="hidden"
             onChange={(e) => {
               uploadFiles([...(e.target.files ?? [])]);

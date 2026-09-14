@@ -1,6 +1,14 @@
 import { asc, desc, eq, sql } from "drizzle-orm";
-import { db } from "../db/client.js";
-import { accounts, assets, documents, holdings, institutions } from "../db/schema.js";
+import { db, type DbExecutor } from "../db/client.js";
+import {
+  accounts,
+  assets,
+  documents,
+  holdings,
+  institutions,
+  type HoldingInsert,
+  type HoldingTableRow,
+} from "../db/schema.js";
 
 export interface LatestHoldingRow {
   accountId: string;
@@ -130,4 +138,14 @@ export async function listHoldingHistoryForAsset(assetId: string): Promise<Holdi
     .innerJoin(documents, eq(documents.id, holdings.documentId))
     .where(eq(holdings.assetId, assetId))
     .orderBy(desc(documents.uploadedAt));
+}
+
+// Takes an executor (plain `db` or a `resolveDocument`-level `tx`) so a
+// Document's Holdings and Transactions insert atomically together.
+export async function insertHolding(
+  input: HoldingInsert,
+  executor: DbExecutor = db,
+): Promise<HoldingTableRow> {
+  const [row] = await executor.insert(holdings).values(input).returning();
+  return row;
 }

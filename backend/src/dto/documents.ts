@@ -13,8 +13,18 @@ export interface DocumentSummary {
   failureReason?: string;
 }
 
-export interface ExtractedLine {
+export type TransactionKind = "buy" | "sell" | "deposit" | "withdrawal";
+
+// A statement can report two distinct things about an Asset: what it's
+// worth now (a "holding" line) and dated activity during the period (a
+// "transaction" line) — independent of each other. Never derive one from a
+// change in the other (see the deleted models/ingest.ts and its
+// CashFlowSource "derived_*" variants for why: it required a whole
+// Snapshot-diffing layer to do so, for a value a statement usually just
+// states directly when it has it at all).
+export interface ExtractedHoldingLine {
   index: number;
+  kind: "holding";
   assetName: string;
   quantity: string;
   value: string;
@@ -22,6 +32,22 @@ export interface ExtractedLine {
   /** Set only when auto-matching already resolved this line — shown read-only. */
   resolvedAssetId?: string;
 }
+
+export interface ExtractedTransactionLine {
+  index: number;
+  kind: "transaction";
+  assetName: string;
+  occurredAt: string;
+  transactionKind: TransactionKind;
+  /** Absent for a pure-cash deposit/withdrawal (no Asset quantity moves). */
+  quantityDelta?: string;
+  amount: string;
+  currency: string;
+  /** Set only when auto-matching already resolved this line — shown read-only. */
+  resolvedAssetId?: string;
+}
+
+export type ExtractedLine = ExtractedHoldingLine | ExtractedTransactionLine;
 
 export interface ValidityCheckResult {
   name: string;
@@ -48,8 +74,10 @@ export type DocumentReview =
   | { reason: "privacy_preflight_aborted"; locallyConfirmed: LocallyConfirmedFields };
 
 export type DocumentResolution =
-  | { index: number; assetId: string }
-  | { index: number; newAsset: NewAssetInput }
+  | { index: number; kind: "holding"; assetId: string }
+  | { index: number; kind: "holding"; newAsset: NewAssetInput }
+  | { index: number; kind: "transaction"; assetId: string }
+  | { index: number; kind: "transaction"; newAsset: NewAssetInput }
   // privacy_preflight_aborted only: no extracted line exists to source
   // quantity/value/currency from, so they travel here instead of being
   // looked up by index.

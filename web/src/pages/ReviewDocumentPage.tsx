@@ -87,24 +87,9 @@ export function ReviewDocumentPage() {
 
   async function handleConfirm() {
     if (!allResolved) return;
-    const resolutions: DocumentResolution[] = unresolvedLines.map((line) => {
-      const state = lineStates[line.index];
-      if (state.mode === "match") {
-        return { index: line.index, assetId: state.assetId };
-      }
-      if (state.mode === "create") {
-        return {
-          index: line.index,
-          newAsset: {
-            type: state.type,
-            name: state.name.trim(),
-            ticker: state.ticker.trim() || undefined,
-            isin: state.isin.trim() || undefined,
-          },
-        };
-      }
-      throw new Error(`line ${line.index} has no resolution`);
-    });
+    const resolutions: DocumentResolution[] = unresolvedLines.map((line) =>
+      buildResolution(line, lineStates[line.index]),
+    );
     await submitResolutions(resolutions);
   }
 
@@ -281,15 +266,46 @@ export function ReviewDocumentPage() {
   );
 }
 
+// `kind` has to be branched on explicitly (rather than spread from `line`)
+// so each branch's object literal lines up with DocumentResolution's own
+// discriminated variants instead of widening to "holding" | "transaction".
+function buildResolution(line: ExtractedLine, state: LineState): DocumentResolution {
+  if (state.mode === "match") {
+    return line.kind === "holding"
+      ? { index: line.index, kind: "holding", assetId: state.assetId }
+      : { index: line.index, kind: "transaction", assetId: state.assetId };
+  }
+  if (state.mode === "create") {
+    const newAsset = {
+      type: state.type,
+      name: state.name.trim(),
+      ticker: state.ticker.trim() || undefined,
+      isin: state.isin.trim() || undefined,
+    };
+    return line.kind === "holding"
+      ? { index: line.index, kind: "holding", newAsset }
+      : { index: line.index, kind: "transaction", newAsset };
+  }
+  throw new Error(`line ${line.index} has no resolution`);
+}
+
+// Holding lines describe current value; transaction lines describe dated
+// activity — the two never mix within one line, so the subtitle differs by
+// `kind` rather than showing blank fields for whichever doesn't apply.
+function lineSubtitle(line: ExtractedLine): string {
+  if (line.kind === "holding") {
+    return `${line.quantity} · ${line.value} ${line.currency}`;
+  }
+  return `${line.transactionKind} · ${line.amount} ${line.currency} on ${line.occurredAt}`;
+}
+
 function MatchedLineRow({ line, assets }: { line: ExtractedLine; assets: Asset[] }) {
   const asset = assets.find((a) => a.id === line.resolvedAssetId);
   return (
     <Card className="flex items-center justify-between">
       <div>
         <p className="font-medium text-gray-900">{line.assetName}</p>
-        <p className="text-sm text-gray-500">
-          {line.quantity} · {line.value} {line.currency}
-        </p>
+        <p className="text-sm text-gray-500">{lineSubtitle(line)}</p>
       </div>
       <Badge className="bg-emerald-100 text-emerald-700">
         Matched to {asset?.name ?? line.resolvedAssetId}
@@ -320,9 +336,7 @@ function ReviewLineEditor({
   return (
     <Card>
       <p className="font-medium text-gray-900">{line.assetName}</p>
-      <p className="mb-3 text-sm text-gray-500">
-        {line.quantity} · {line.value} {line.currency}
-      </p>
+      <p className="mb-3 text-sm text-gray-500">{lineSubtitle(line)}</p>
 
       {state.mode !== "create" && (
         <Combobox

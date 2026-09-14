@@ -13,6 +13,7 @@ import type {
   DocumentStatus,
   ExtractedLine,
   LocallyConfirmedFields,
+  TransactionKind,
   ValidityCheckResult,
 } from "../dto/index.js";
 
@@ -127,8 +128,7 @@ export const holdings = pgTable("holdings", {
 // (dto/holdings.ts) for the Assets table's fully-resolved row; this is the
 // raw DB row long before it's assembled into one.
 export type HoldingTableRow = typeof holdings.$inferSelect;
-
-export type TransactionKind = "buy" | "sell" | "deposit" | "withdrawal";
+export type HoldingInsert = typeof holdings.$inferInsert;
 
 // An internal ledger, never exposed to web directly — the only way to
 // compute OpenHoldingDetail.xirr (money-weighted return needs dated cash
