@@ -64,7 +64,7 @@ Each service owns its own dependencies and tests; `docker-compose.yml` orchestra
 
 ## Local development
 
-Requires Docker (for Postgres, backend, web, and parser) and Node 20+ on the host for the one-time setup below.
+Requires Docker (for Postgres, backend, web, and parser) and Node 22.13+ on the host for the one-time setup below (`pdfjs-dist` requires it).
 
 ```sh
 cp .env.example .env   # then edit SESSION_SECRET/POSTGRES_PASSWORD, add ANTHROPIC_API_KEY

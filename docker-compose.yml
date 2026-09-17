@@ -8,7 +8,7 @@ services:
       - "5433:5432" # local dev convenience (psql/GUI tools); container-internal port stays 5432
 
   backend:
-    image: node:20-alpine
+    image: node:22-alpine
     working_dir: /repo
     volumes:
       - .:/repo
@@ -21,7 +21,7 @@ services:
       - postgres
 
   web:
-    image: node:20-alpine
+    image: node:22-alpine
     working_dir: /repo
     volumes:
       - .:/repo
