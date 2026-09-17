@@ -9,6 +9,22 @@ A private, self-hosted financial tracking platform for a single household — no
 
 Vantage's one job: turn a household's own PDF statements (brokerage, pension, savings) into a single, aggregated view of what they hold and how it's moved, without ever sending an unredacted document to a third party. A human always approves what's sent to the model, and every extracted figure is shown back in plain language for confirmation before it's committed.
 
+> All screenshots below are captured against a synthetic statement generated for this purpose (fictional institution, name, and figures) — never a real document.
+
+## Screenshots
+
+**Approve what reaches the model, directly on the document.** Every line is classified automatically — green will be sent, red-dashed is unmarked/undecided, and dark boxes are identifying information the parser redacted before it ever reached this screen.
+
+![Content review — click-to-approve overlay on the source PDF](docs/screenshots/content-review.png)
+
+**Every extracted figure is a claim, not a fact.** The model states in plain language what it read off the document, with each value directly editable and individually confirmable — and a validity check catches numbers that don't add up before anything is committed.
+
+![Extraction review — natural-language, editable, per-line confirmation](docs/screenshots/extraction-review.png)
+
+**One aggregated view once it's in.** Net worth, allocation, and sector/geography breakdown across every imported statement.
+
+![Dashboard — net worth, allocation by type, and sector/geography](docs/screenshots/dashboard.png)
+
 ## Architecture
 
 ```mermaid
