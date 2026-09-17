@@ -1,8 +1,18 @@
 import type { DocumentResolution, DocumentReview, DocumentSummary } from "@vantage/backend/dto";
-import { apiClient } from "./client";
+import { apiClient, ApiError } from "./client";
 
 export const documentsApi = {
   list: () => apiClient.get<DocumentSummary[]>("/api/documents"),
+  // The raw PDF, for content_review's overlay — DocumentLine's bbox is
+  // only meaningful against this exact file. Not JSON, so it can't go
+  // through apiClient.get.
+  file: async (documentId: string): Promise<ArrayBuffer> => {
+    const res = await fetch(`/api/documents/${documentId}/file`, { credentials: "include" });
+    if (!res.ok) {
+      throw new ApiError("could not load the document file", res.status);
+    }
+    return res.arrayBuffer();
+  },
   upload: (accountId: string, file: File) => {
     const formData = new FormData();
     formData.set("accountId", accountId);

@@ -1,13 +1,13 @@
-from dataclasses import asdict
-from typing import Any, Literal
+import json
+from typing import Any
 
 import pdfplumber
 from fastapi import FastAPI, File, Form, UploadFile
-from pydantic import BaseModel
 
-from common import fix_rtl
-from document_template import ValidityFailure
-from registry import detect_and_extract
+from extraction import extract_with_model
+from formatting import format_result
+from segmentation import segment
+from sensitivity import classify
 
 app = FastAPI()
 
@@ -17,57 +17,72 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-class ParseResponse(BaseModel):
-    ok: bool
-    data: Any | None = None
-    reason: str | None = None
-    # A third outcome alongside ok=True/False (ADR-0026): the Document was
-    # recognized, but ExtractionEngine's completeness gate or a reconcile
-    # check found something needing a human — never true when ok=True.
-    needsReview: bool = False
-    values: Any | None = None
-    failedChecks: list[dict[str, Any]] | None = None
-
-
-@app.post("/parse")
-async def parse(
-    format: Literal["pdf"] = Form(...),
+@app.post("/segment")
+async def segment_document(
     file: UploadFile = File(...),  # noqa: B008 — FastAPI's own idiomatic DI pattern
-) -> ParseResponse:
-    # institution is deliberately not a request field — ADR-0021: the
-    # caller no longer resolves it in advance, this service detects it from
-    # the file's own content instead (parsers/registry.py).
+) -> dict[str, Any]:
+    """Stages 1+2 only — never calls the model. Every document gets a
+    content_review: a human reviews exactly what's about to be sent, line
+    by line, before /extract is ever called. This gate runs for every
+    document today; backend/UI can make it conditional later without any
+    change here."""
     try:
         with pdfplumber.open(file.file) as pdf:
             if not pdf.pages:
-                return ParseResponse(ok=False, reason="no matching parser (unrecognized institution)")
+                return {"outcome": "failed", "reason": "empty PDF"}
             page = pdf.pages[0]
-            raw_text = page.extract_text() or ""
-    except Exception:  # noqa: BLE001 — deliberate fail-safe boundary, see below
-        # A corrupt/unreadable upload should fail cleanly, same as any
-        # other unrecognized input — never a bare 500 (ADR-0014's fail-loud
-        # philosophy applies to "can't even read this," not just "don't
-        # recognize the institution"). Deliberately narrow: only wraps
-        # opening/reading the file — a real bug in detect_and_extract below
-        # (e.g. a misconfigured template) must surface as itself, not get
-        # mislabeled as an unreadable file.
-        return ParseResponse(ok=False, reason="could not read file as a PDF")
-    text = fix_rtl(raw_text)
+    except Exception:  # noqa: BLE001 — deliberate fail-safe boundary: an
+        # unreadable upload should fail cleanly, never a bare 500 (ADR-0014's
+        # fail-loud philosophy).
+        return {"outcome": "failed", "reason": "could not read file as a PDF"}
 
-    # page stays usable here even though `with` has exited — pdfplumber
-    # caches each page's parsed structures, no further file I/O needed
-    # (confirmed empirically). ExtractionEngine-backed entries (Gemel;
-    # #53-#55 next) need the live Page, not just text, for region-cropping/
-    # table extraction.
-    data = detect_and_extract(text, raw_text, page)
+    segmentation = segment(page)
+    lines = classify(segmentation)
 
-    if data is None:
-        return ParseResponse(ok=False, reason="no matching parser (unrecognized institution)")
-    if isinstance(data, ValidityFailure):
-        return ParseResponse(
-            ok=False,
-            needsReview=True,
-            values=data.values,
-            failedChecks=[asdict(check) for check in data.failed_checks],
-        )
-    return ParseResponse(ok=True, data=data)
+    return {
+        "outcome": "needs_review",
+        "asOfDate": segmentation.identity_values.get("asOfDate"),
+        "review": {
+            "reason": "content_review",
+            "lines": [
+                {
+                    "index": line.index,
+                    "status": "redacted"
+                    if line.redacted
+                    else ("flagged" if line.flagged else "included"),
+                    "text": line.text,
+                    "flagReason": line.flag_reason,
+                    "bbox": {
+                        "x0": line.bbox.x0,
+                        "top": line.bbox.top,
+                        "x1": line.bbox.x1,
+                        "bottom": line.bbox.bottom,
+                    },
+                }
+                for line in lines
+            ],
+            "pageWidth": segmentation.page_width,
+            "pageHeight": segmentation.page_height,
+            # Backend-internal only — never forwarded to web's DocumentReview
+            # (see getDocumentReview in backend/src/services/documents.ts).
+            # Held on the Document row until resolve, then handed back to
+            # /extract exactly as captured here.
+            "identityValues": segmentation.identity_values,
+        },
+    }
+
+
+@app.post("/extract")
+async def extract_document(
+    buffer: str = Form(...),
+    identityValues: str = Form(...),
+    existingAssets: str = Form("[]"),
+) -> dict[str, Any]:
+    """Stages 3+4 — only ever called with content a human has already
+    approved (backend enforces this; this endpoint itself trusts its
+    caller, same as ADR-0001's "backend never delegates the Document state
+    decision to parser" — parser just computes, backend decides)."""
+    llm_result = extract_with_model(buffer)
+    return format_result(
+        json.loads(identityValues), llm_result, json.loads(existingAssets)
+    )

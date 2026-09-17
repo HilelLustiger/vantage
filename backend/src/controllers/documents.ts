@@ -6,8 +6,9 @@ import type {
   DocumentSummary,
   ErrorResponse,
 } from "../dto/index.js";
-import { listDocuments } from "../repositories/documents.js";
+import { findDocumentById, listDocuments } from "../repositories/documents.js";
 import { getDocumentReview, resolveDocument, uploadDocument } from "../services/documents.js";
+import { readDocumentFile } from "../infra/storage.js";
 import { requireAuth } from "./requireAuth.js";
 
 export const documentsRouter = Router();
@@ -39,6 +40,23 @@ documentsRouter.post(
     }
   },
 );
+
+// The raw PDF, for the content_review screen to render alongside its
+// coordinate overlay (see DocumentLine's bbox — units only make sense
+// against the same file this endpoint serves).
+documentsRouter.get("/:id/file", async (req: Request, res: Response<Buffer | ErrorResponse>) => {
+  const document = await findDocumentById(req.params.id);
+  if (!document) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+  try {
+    const file = await readDocumentFile(req.params.id);
+    res.status(200).contentType("application/pdf").send(file);
+  } catch {
+    res.status(404).json({ error: "not found" });
+  }
+});
 
 documentsRouter.get(
   "/:id/review",

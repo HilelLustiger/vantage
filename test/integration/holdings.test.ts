@@ -5,11 +5,11 @@ import { createApp } from "@vantage/backend/app";
 import { createUser } from "@vantage/backend/repositories/users";
 import { hashPassword } from "@vantage/backend/password";
 
-// No Document ingest pipeline exists yet (see backend/src/app.ts's own
-// note on this), so there's no way to get an actual Holding into the test
-// DB — this suite covers what's actually reachable today: the empty-state
-// shape, query validation, and auth, not the valuation math itself (that's
-// services/holdings.test.ts's job once it has fixtures to compute over).
+// documents.test.ts exercises the ingest pipeline that can now put a real
+// Holding into the test DB — this suite still only covers what's reachable
+// without that (the empty-state shape, query validation, and auth), not the
+// valuation math itself (that's services/holdings.test.ts's job once it has
+// fixtures to compute over).
 async function loginAsNewUser(app: ReturnType<typeof createApp>) {
   const email = `test-${randomUUID()}@example.com`;
   const password = "correct-horse-battery-staple";

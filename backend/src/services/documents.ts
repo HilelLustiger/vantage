@@ -4,24 +4,25 @@ import type {
   DocumentResolution,
   DocumentSummary,
   ExtractedLine,
-  NewAssetInput,
 } from "../dto/index.js";
 import { db, type DbExecutor } from "../db/client.js";
-import type { DocumentRow } from "../db/schema.js";
+import type { PendingReview } from "../db/schema.js";
 import { saveDocumentFile } from "../infra/storage.js";
 import {
   commitDocument,
-  findDocumentByChecksum,
+  failDocument,
   findDocumentById,
+  findDocumentByChecksum,
   findDocumentRowById,
+  findPendingReview,
   insertDocument,
-  saveDocumentReview,
+  savePendingReview,
   updateDocumentStatus,
 } from "../repositories/documents.js";
 import { createAsset, listAssets } from "../repositories/assets.js";
 import { insertHolding } from "../repositories/holdings.js";
 import { insertTransaction } from "../repositories/transactions.js";
-import { parseDocument, type ParseDocumentResult } from "./parser.js";
+import { extractFromBuffer, segmentDocument, type ParseDocumentResult } from "./parser.js";
 
 function checksumOf(file: Buffer): string {
   return createHash("sha256").update(file).digest("hex");
@@ -43,74 +44,53 @@ export async function uploadDocument(accountId: string, file: Buffer): Promise<D
   await updateDocumentStatus(document.id, "processing");
 
   try {
-    const existingAssets = await listAssets();
-    const result = await parseDocument({ file, existingAssets });
-    await applyParseResult(document.id, document.accountId, result);
+    const result = await segmentDocument(file);
+    if (result.outcome === "failed") {
+      await updateDocumentStatus(document.id, "failed", result.reason);
+    } else {
+      await savePendingReview(document.id, result.asOfDate, {
+        reason: "content_review",
+        lines: result.review.lines,
+        pageWidth: result.review.pageWidth,
+        pageHeight: result.review.pageHeight,
+        identityValues: result.review.identityValues,
+      });
+    }
   } catch (err) {
-    const reason = err instanceof Error ? err.message : "parsing failed";
+    const reason = err instanceof Error ? err.message : "segmentation failed";
     await updateDocumentStatus(document.id, "failed", reason);
   }
 
   return (await findDocumentById(document.id))!;
 }
 
-async function applyParseResult(
-  documentId: string,
-  accountId: string,
-  result: ParseDocumentResult,
-): Promise<void> {
-  if (result.outcome === "failed") {
-    await updateDocumentStatus(documentId, "failed", result.reason);
-    return;
-  }
-
-  if (result.outcome === "needs_review") {
-    await saveDocumentReview(documentId, {
-      asOfDate: result.asOfDate,
-      ...reviewToColumns(result.review),
-    });
-    return;
-  }
-
-  await db.transaction(async (tx) => {
-    for (const holding of result.holdings) {
-      await insertHolding({ documentId, ...holding }, tx);
-    }
-    for (const transaction of result.transactions) {
-      await insertTransaction({ accountId, ...transaction }, tx);
-    }
-  });
-  await commitDocument(documentId, result.asOfDate);
-}
-
-function reviewToColumns(review: DocumentReview) {
-  if (review.reason === "privacy_preflight_aborted") {
-    return { locallyConfirmed: review.locallyConfirmed };
-  }
-  if (review.reason === "validity_failure") {
-    return { parsedLines: review.lines, validityFailedChecks: review.failedChecks };
-  }
-  return { parsedLines: review.lines };
-}
-
-// The stored reason lives entirely in which columns are populated (see
-// db/schema.ts's comment on `documents`) — this is the one place that
-// reconstructs it back into the discriminated DocumentReview shape.
+// The stored PendingReview already carries `reason` explicitly — no
+// inference needed. This just strips identityValues (backend-internal, see
+// services/parser.ts's SegmentResult) before handing content_review to web.
 export async function getDocumentReview(documentId: string): Promise<DocumentReview | undefined> {
   const row = await findDocumentRowById(documentId);
   if (!row || row.status !== "needs_review") return undefined;
 
-  if (row.locallyConfirmed) {
-    return { reason: "privacy_preflight_aborted", locallyConfirmed: row.locallyConfirmed };
-  }
-  if (row.validityFailedChecks) {
+  const pending = await findPendingReview(documentId);
+  if (!pending) return undefined;
+
+  if (pending.reason === "content_review") {
     return {
-      reason: "validity_failure",
-      lines: row.parsedLines ?? [],
-      failedChecks: row.validityFailedChecks,
+      reason: "content_review",
+      lines: pending.lines,
+      pageWidth: pending.pageWidth,
+      pageHeight: pending.pageHeight,
     };
   }
-  return { reason: "asset_resolution", lines: row.parsedLines ?? [] };
+  // Already required by resolveExtractionReview to commit — set on this
+  // row back when the pending review was first saved (see uploadDocument/
+  // applyExtractionResult), never null by the time we're here.
+  return {
+    reason: "extraction_review",
+    lines: pending.lines,
+    failedChecks: pending.failedChecks,
+    asOfDate: row.asOfDate!,
+  };
 }
 
 export class DocumentNotAwaitingReviewError extends Error {}
@@ -120,116 +100,144 @@ export async function resolveDocument(
   resolutions: DocumentResolution[],
 ): Promise<DocumentSummary> {
   const row = await findDocumentRowById(documentId);
-  if (!row || row.status !== "needs_review") {
+  const pending =
+    row && row.status === "needs_review" ? await findPendingReview(documentId) : undefined;
+  if (!row || row.status !== "needs_review" || !pending) {
     throw new DocumentNotAwaitingReviewError("document is not waiting on review");
   }
 
   try {
-    if (row.locallyConfirmed) {
-      await resolvePrivacyPath(row, resolutions);
+    if (pending.reason === "content_review") {
+      await resolveContentReview(documentId, pending, resolutions);
     } else {
-      await resolveExtractedLines(row, resolutions);
+      await resolveExtractionReview(row.accountId, documentId, pending, resolutions);
     }
   } catch (err) {
     // Not retryable from here — the frontend's review page doesn't route
     // back into itself on failure, it shows failureReason and stops.
     const reason = err instanceof Error ? err.message : "resolve failed";
-    await updateDocumentStatus(documentId, "failed", reason);
+    await failDocument(documentId, reason);
   }
 
   return (await findDocumentById(documentId))!;
 }
 
+async function resolveContentReview(
+  documentId: string,
+  pending: Extract<PendingReview, { reason: "content_review" }>,
+  resolutions: DocumentResolution[],
+): Promise<void> {
+  const approval = resolutions.find(
+    (r): r is Extract<DocumentResolution, { approveContentReview: unknown }> =>
+      "approveContentReview" in r,
+  );
+  if (!approval) {
+    throw new Error("no content approved for extraction");
+  }
+  const included = new Set(approval.approveContentReview.includedIndices);
+
+  const buffer = pending.lines
+    // Redacted lines can never be included, no matter what the resolution
+    // says — the text isn't even available here to include.
+    .filter((line) => line.status !== "redacted" && included.has(line.index))
+    .map((line) => line.text)
+    .join("\n");
+
+  const existingAssets = await listAssets();
+  const result = await extractFromBuffer(buffer, pending.identityValues, existingAssets);
+  await applyExtractionResult(documentId, result);
+}
+
+async function applyExtractionResult(
+  documentId: string,
+  result: ParseDocumentResult,
+): Promise<void> {
+  if (result.outcome === "failed") {
+    throw new Error(result.reason);
+  }
+  if (result.outcome === "needs_review") {
+    await savePendingReview(documentId, result.asOfDate, {
+      reason: "extraction_review",
+      lines: result.review.lines,
+      failedChecks: result.review.failedChecks,
+    });
+    return;
+  }
+
+  const row = (await findDocumentRowById(documentId))!;
+  await db.transaction(async (tx) => {
+    for (const holding of result.holdings) {
+      await insertHolding({ documentId, ...holding }, tx);
+    }
+    for (const transaction of result.transactions) {
+      await insertTransaction({ accountId: row.accountId, ...transaction }, tx);
+    }
+  });
+  await commitDocument(documentId, result.asOfDate);
+}
+
+type IndexedResolution = Exclude<DocumentResolution, { approveContentReview: unknown }>;
+
 async function resolveAssetId(
-  input: { assetId?: string; newAsset?: NewAssetInput },
+  input: IndexedResolution | undefined,
   tx: DbExecutor,
 ): Promise<string> {
-  if (input.assetId) return input.assetId;
-  if (input.newAsset) {
+  if (input && "assetId" in input) return input.assetId;
+  if (input && "newAsset" in input) {
     const asset = await createAsset(input.newAsset, tx);
     return asset.id;
   }
   throw new Error("resolution has neither assetId nor newAsset");
 }
 
-async function resolvePrivacyPath(
-  row: DocumentRow,
-  resolutions: DocumentResolution[],
-): Promise<void> {
-  const manualHoldings = resolutions.filter(
-    (r): r is Extract<DocumentResolution, { manualHolding: unknown }> => "manualHolding" in r,
-  );
-  if (manualHoldings.length === 0) {
-    throw new Error("no holdings provided");
-  }
-
-  await db.transaction(async (tx) => {
-    for (const { manualHolding } of manualHoldings) {
-      const assetId = await resolveAssetId(manualHolding, tx);
-      await insertHolding(
-        {
-          documentId: row.id,
-          assetId,
-          quantity: manualHolding.quantity,
-          value: manualHolding.value,
-          currency: manualHolding.currency,
-        },
-        tx,
-      );
-    }
-  });
-  await commitDocument(row.id, row.locallyConfirmed!.asOfDate);
-}
-
-type IndexedResolution = Exclude<DocumentResolution, { manualHolding: unknown }>;
-
+// No throw on a miss — a line parser already auto-matched needs no
+// resolution at all unless the human is also correcting its figures.
 function findResolutionFor(
   line: ExtractedLine,
   resolutions: DocumentResolution[],
-): { assetId?: string; newAsset?: NewAssetInput } {
-  const match = resolutions.find(
+): IndexedResolution | undefined {
+  return resolutions.find(
     (r): r is IndexedResolution => "index" in r && r.index === line.index && r.kind === line.kind,
   );
-  if (!match) {
-    throw new Error(`no resolution provided for line ${line.index}`);
-  }
-  return match;
 }
 
-async function resolveExtractedLines(
-  row: DocumentRow,
+async function resolveExtractionReview(
+  accountId: string,
+  documentId: string,
+  pending: Extract<PendingReview, { reason: "extraction_review" }>,
   resolutions: DocumentResolution[],
 ): Promise<void> {
-  const lines = row.parsedLines ?? [];
-  if (!row.asOfDate) {
+  const asOfDate = (await findDocumentRowById(documentId))!.asOfDate;
+  if (!asOfDate) {
     throw new Error("document has no as-of date");
   }
-  const asOfDate = row.asOfDate;
 
   await db.transaction(async (tx) => {
-    for (const line of lines) {
-      const assetId =
-        line.resolvedAssetId ?? (await resolveAssetId(findResolutionFor(line, resolutions), tx));
+    for (const line of pending.lines) {
+      const resolution = findResolutionFor(line, resolutions);
+      const assetId = line.resolvedAssetId ?? (await resolveAssetId(resolution, tx));
       if (line.kind === "holding") {
+        const override = resolution && "value" in resolution ? resolution : undefined;
         await insertHolding(
           {
-            documentId: row.id,
+            documentId,
             assetId,
-            quantity: line.quantity,
-            value: line.value,
-            currency: line.currency,
+            quantity: override?.quantity ?? line.quantity,
+            value: override?.value ?? line.value,
+            currency: override?.currency ?? line.currency,
           },
           tx,
         );
       } else {
+        const override = resolution && "amount" in resolution ? resolution : undefined;
         await insertTransaction(
           {
-            accountId: row.accountId,
+            accountId,
             assetId,
-            occurredAt: line.occurredAt,
-            quantityDelta: line.quantityDelta ?? "0",
-            amount: line.amount,
-            currency: line.currency,
+            occurredAt: override?.occurredAt ?? line.occurredAt,
+            quantityDelta: override?.quantityDelta ?? line.quantityDelta ?? "0",
+            amount: override?.amount ?? line.amount,
+            currency: override?.currency ?? line.currency,
             kind: line.transactionKind,
           },
           tx,
@@ -237,5 +245,5 @@ async function resolveExtractedLines(
       }
     }
   });
-  await commitDocument(row.id, asOfDate);
+  await commitDocument(documentId, asOfDate);
 }

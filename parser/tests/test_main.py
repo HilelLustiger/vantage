@@ -1,87 +1,145 @@
 import io
+import json
 
 from fastapi.testclient import TestClient
 from reportlab.pdfgen import canvas
 
 import main
-from document_template import ValidityFailure, ValidityResult
+from segmentation import Bbox, Segmentation, SegmentedLine
 
 client = TestClient(main.app)
 
+_BBOX = Bbox(x0=1.0, top=2.0, x1=3.0, bottom=4.0)
 
-def _minimal_valid_pdf() -> bytes:
-    # A Canvas with nothing drawn on it produces zero pages once parsed —
-    # draw a single character so pdfplumber sees a real, if content-free,
-    # page (detect_and_extract needs one to even get called).
+
+def _pdf_bytes(lines: list[str]) -> bytes:
     buf = io.BytesIO()
-    c = canvas.Canvas(buf)
-    c.drawString(0, 0, "x")
+    c = canvas.Canvas(buf, pagesize=(600, 800))
+    y = 750
+    for line in lines:
+        c.drawString(50, y, line)
+        y -= 20
     c.save()
     return buf.getvalue()
 
 
-def test_health() -> None:
+def test_health():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 
-def test_parse_with_unreadable_pdf_fails_cleanly() -> None:
-    # Not a structurally valid PDF (no xref/Root) — pdfplumber can't even
-    # open it. Must fail cleanly (ok=False), never a bare 500. Testing
-    # "valid PDF but unrecognized institution" against a real generated PDF
-    # is out of scope here — see parsers/registry.py's own unit test for
-    # that case at the text level, and docs/private-docs/
-    # auto-institution-detection.md for why real sample PDFs can't be
-    # committed as fixtures.
+def test_segment_fails_on_unreadable_file():
     response = client.post(
-        "/parse",
-        data={"format": "pdf"},
-        files={"file": ("statement.pdf", b"%PDF-1.4\n%%EOF", "application/pdf")},
+        "/segment",
+        files={"file": ("statement.pdf", b"not a pdf", "application/pdf")},
     )
     assert response.status_code == 200
+    assert response.json() == {
+        "outcome": "failed",
+        "reason": "could not read file as a PDF",
+    }
+
+
+def test_segment_returns_a_content_review_with_every_line_classified(monkeypatch):
+    fake_segmentation = Segmentation(
+        identity_values={
+            "accountHolder": "Jane Doe",
+            "accountNumber": None,
+            "asOfDate": "1/1/2026",
+            "statementBalance": None,
+        },
+        lines=[
+            SegmentedLine(index=0, redacted=True, text=None, bbox=_BBOX),
+            SegmentedLine(
+                index=1, redacted=False, text="Fund ABC 10 1500.00", bbox=_BBOX
+            ),
+            SegmentedLine(
+                index=2,
+                redacted=False,
+                text="odd",
+                bbox=_BBOX,
+                flagged=True,
+                flag_reason="shape",
+            ),
+        ],
+        page_width=600.0,
+        page_height=800.0,
+    )
+    monkeypatch.setattr(main, "segment", lambda page: fake_segmentation)
+    monkeypatch.setattr(main, "classify", lambda segmentation: segmentation.lines)
+
+    response = client.post(
+        "/segment",
+        files={"file": ("statement.pdf", _pdf_bytes(["hello"]), "application/pdf")},
+    )
+
     body = response.json()
-    assert body["ok"] is False
-    assert body["reason"]
-
-
-def test_parse_rejects_unrecognized_format() -> None:
-    response = client.post(
-        "/parse",
-        data={"format": "csv"},
-        files={"file": ("statement.csv", b"a,b,c", "text/csv")},
-    )
-    assert response.status_code == 422
-
-
-def test_parse_requires_a_file() -> None:
-    response = client.post(
-        "/parse",
-        data={"format": "pdf"},
-    )
-    assert response.status_code == 422
-
-
-def test_parse_reports_needs_review_on_validity_failure(monkeypatch) -> None:
-    # Monkeypatching detect_and_extract exercises this response shape
-    # directly, independent of which real registry entry (Gemel, since
-    # #52) happens to produce one — same synthetic-data spirit as #49.
-    failure = ValidityFailure(
-        values={"endingBalance": None},
-        failed_checks=[ValidityResult("endingBalance", None, None, False)],
-    )
-    monkeypatch.setattr(main, "detect_and_extract", lambda text, raw_text, page: failure)
-
-    response = client.post(
-        "/parse",
-        data={"format": "pdf"},
-        files={"file": ("statement.pdf", _minimal_valid_pdf(), "application/pdf")},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["ok"] is False
-    assert body["needsReview"] is True
-    assert body["values"] == {"endingBalance": None}
-    assert body["failedChecks"] == [
-        {"name": "endingBalance", "computed": None, "claimed": None, "matched": False}
+    assert body["outcome"] == "needs_review"
+    assert body["asOfDate"] == "1/1/2026"
+    assert body["review"]["reason"] == "content_review"
+    bbox = {"x0": 1.0, "top": 2.0, "x1": 3.0, "bottom": 4.0}
+    assert body["review"]["lines"] == [
+        {
+            "index": 0,
+            "status": "redacted",
+            "text": None,
+            "flagReason": None,
+            "bbox": bbox,
+        },
+        {
+            "index": 1,
+            "status": "included",
+            "text": "Fund ABC 10 1500.00",
+            "flagReason": None,
+            "bbox": bbox,
+        },
+        {
+            "index": 2,
+            "status": "flagged",
+            "text": "odd",
+            "flagReason": "shape",
+            "bbox": bbox,
+        },
     ]
+    assert body["review"]["pageWidth"] == 600.0
+    assert body["review"]["pageHeight"] == 800.0
+    assert body["review"]["identityValues"]["accountHolder"] == "Jane Doe"
+
+
+def test_extract_calls_the_model_with_the_given_buffer_and_formats_the_result(
+    monkeypatch,
+):
+    captured_buffer = {}
+
+    def _fake_extract(buffer):
+        captured_buffer["value"] = buffer
+        return "llm-result"
+
+    monkeypatch.setattr(main, "extract_with_model", _fake_extract)
+    monkeypatch.setattr(
+        main,
+        "format_result",
+        lambda identity_values, llm_result, existing_assets: {
+            "outcome": "committed",
+            "asOfDate": identity_values.get("asOfDate"),
+            "holdings": [],
+            "transactions": [],
+            "receivedExistingAssets": existing_assets,
+        },
+    )
+
+    response = client.post(
+        "/extract",
+        data={
+            "buffer": "Fund ABC 10 1500.00",
+            "identityValues": json.dumps({"asOfDate": "1/1/2026"}),
+            "existingAssets": json.dumps([{"id": "asset-1"}]),
+        },
+    )
+
+    body = response.json()
+    assert captured_buffer["value"] == "Fund ABC 10 1500.00"
+    assert body["outcome"] == "committed"
+    assert body["asOfDate"] == "1/1/2026"
+    assert body["receivedExistingAssets"] == [{"id": "asset-1"}]

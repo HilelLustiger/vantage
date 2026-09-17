@@ -1,38 +1,54 @@
+import { useEffect, useRef, useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Card } from "./Card";
+import { documentsApi } from "../api/documents";
 
-// The left half of the review flow's dual-pane shape (ADR-0008): "All three
-// [NeedsReview reasons] converge on one manual-correction screen shape
-// (dual-pane: original document preview alongside an editable form)." No
-// real PDF rendering yet — a generic document skeleton, with an optional
-// highlighted region for whichever part of the statement the right-hand
-// form is asking the user to fill in or correct.
-export function DocumentPreviewPane({ highlightNote }: { highlightNote?: string }) {
+// The left half of the extraction_review dual-pane shape (ADR-0008):
+// the real source PDF, for visual context while resolving each extracted
+// line — ExtractedLine carries no bbox (unlike content_review's DocumentLine),
+// so this renders the page only, with no per-line overlay.
+export function DocumentPreviewPane({ documentId }: { documentId: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function render() {
+      try {
+        const buffer = await documentsApi.file(documentId);
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
+
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = canvasRef.current;
+        if (!canvas || cancelled) return;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        await page.render({ canvas, canvasContext: context, viewport }).promise;
+      } catch {
+        if (!cancelled) setRenderError("Couldn't load a preview of this document.");
+      }
+    }
+
+    render();
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId]);
+
   return (
-    <Card className="flex w-[42%] shrink-0 flex-col p-4">
+    <Card className="flex w-[42%] shrink-0 flex-col overflow-y-auto p-4">
       <p className="mb-2.5 px-1 text-sm font-medium text-gray-500">Original document</p>
-      <div className="flex-1 overflow-hidden rounded-lg bg-gray-100 p-7">
-        <div className="h-full rounded bg-white p-6 shadow-sm">
-          <div className="mb-2 h-3.5 w-[55%] rounded bg-gray-200" />
-          <div className="mb-6 h-2.5 w-[35%] rounded bg-gray-200" />
-          <div className="mb-1.5 h-2 w-[80%] rounded bg-gray-100" />
-          <div className="mb-1.5 h-2 w-[70%] rounded bg-gray-100" />
-          <div className="mb-6 h-2 w-[75%] rounded bg-gray-100" />
-
-          {highlightNote && (
-            <div className="relative rounded-md border-[1.5px] border-dashed border-amber-400 p-3.5">
-              <span className="absolute -top-2.5 left-3 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                {highlightNote}
-              </span>
-              <div className="mb-2 mt-1.5 h-2 w-[90%] rounded bg-amber-200/50" />
-              <div className="mb-2 h-2 w-[85%] rounded bg-amber-200/50" />
-              <div className="mb-2 h-2 w-[88%] rounded bg-amber-200/50" />
-              <div className="h-2 w-[80%] rounded bg-amber-200/50" />
-            </div>
-          )}
-
-          <div className="mt-5 h-2 w-[60%] rounded bg-gray-100" />
-        </div>
-      </div>
+      {renderError ? (
+        <p className="p-4 text-sm text-red-600">{renderError}</p>
+      ) : (
+        <canvas ref={canvasRef} className="block h-auto w-full rounded-lg" />
+      )}
     </Card>
   );
 }

@@ -10,12 +10,28 @@ import {
 } from "drizzle-orm/pg-core";
 import type {
   AssetType,
+  DocumentLine,
   DocumentStatus,
   ExtractedLine,
-  LocallyConfirmedFields,
   TransactionKind,
   ValidityCheckResult,
 } from "../dto/index.js";
+
+// Backend-internal — never exposed to web as-is (see getDocumentReview in
+// services/documents.ts, which strips identityValues before returning the
+// content_review case as a DocumentReview). Lives in its own table, not on
+// `documents` itself, so that table holds only finished/stable Document
+// state — this row exists only while status is "needs_review" and is
+// deleted once the Document moves past it.
+export type PendingReview =
+  | {
+      reason: "content_review";
+      lines: DocumentLine[];
+      pageWidth: number;
+      pageHeight: number;
+      identityValues: Record<string, string | null>;
+    }
+  | { reason: "extraction_review"; lines: ExtractedLine[]; failedChecks: ValidityCheckResult[] };
 
 export const users = pgTable("users", {
   id: text("id")
@@ -81,10 +97,8 @@ export const assets = pgTable("assets", {
 });
 export type AssetRow = typeof assets.$inferSelect;
 
-// One row per uploaded statement. `asOfDate`/`parsedLines`/`locallyConfirmed`/
-// `validityFailedChecks` are populated once parsing (or the privacy
-// preflight check) has run — null until then. DocumentReview's `reason` is
-// derived from which of these is populated, not stored separately.
+// One row per uploaded statement — only finished/stable state, never an
+// in-progress review payload (see documentPendingReviews below).
 export const documents = pgTable("documents", {
   id: text("id")
     .primaryKey()
@@ -100,12 +114,21 @@ export const documents = pgTable("documents", {
   // The statement's own stated date — distinct from uploadedAt, and what a
   // committed Document's Holdings are "as of" for Freshness purposes.
   asOfDate: date("as_of_date"),
-  parsedLines: jsonb("parsed_lines").$type<ExtractedLine[]>(),
-  locallyConfirmed: jsonb("locally_confirmed").$type<LocallyConfirmedFields>(),
-  validityFailedChecks: jsonb("validity_failed_checks").$type<ValidityCheckResult[]>(),
 });
 export type DocumentRow = typeof documents.$inferSelect;
 export type DocumentInsert = typeof documents.$inferInsert;
+
+// One row per Document currently in needs_review — deleted once the
+// Document moves past it (committed or failed). See the PendingReview type
+// above for why this is its own table rather than more nullable columns on
+// `documents`.
+export const documentPendingReviews = pgTable("document_pending_reviews", {
+  documentId: text("document_id")
+    .primaryKey()
+    .references(() => documents.id),
+  payload: jsonb("payload").$type<PendingReview>().notNull(),
+});
+export type DocumentPendingReviewRow = typeof documentPendingReviews.$inferSelect;
 
 // What one Document stated: this Asset's quantity/value as of that
 // Document's asOfDate. HoldingRow's current value/freshness/history are all

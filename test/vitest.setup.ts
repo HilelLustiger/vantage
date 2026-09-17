@@ -61,8 +61,8 @@ beforeAll(async () => {
   // database itself instead of just relocating the original problem.
   await testPool.query(`
     TRUNCATE TABLE
-      transactions, holdings, documents, account_owners,
-      accounts, institutions, assets, session, users
+      transactions, holdings, document_pending_reviews, documents,
+      account_owners, accounts, institutions, assets, session, users
     RESTART IDENTITY CASCADE
   `);
   await testPool.end();

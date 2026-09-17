@@ -1,3 +1,5 @@
+"""Generic, institution-agnostic helpers shared across the pipeline stages."""
+
 import re
 
 from bidi.algorithm import get_display
@@ -44,31 +46,6 @@ def parse_pct(s: str | None) -> float | None:
 
 def normalize_2digit_year(date: str) -> str:
     """'17/09/24' -> '17/09/2024' — assumes 20xx, matching every real sample
-    and this app's realistic usage range. Per-transaction tables (Excellence,
-    Hapoalim) use 2-digit years while the rest of each document (and every
-    other real sample in this app) uses 4-digit years — a real inconsistency
-    within one document, normalized here so downstream consumers see one
-    format regardless of institution."""
+    and this app's realistic usage range."""
     day, month, year = date.split("/")
     return f"{day}/{month}/20{year}"
-
-
-# Shared across per-transaction parsers (Excellence, Hapoalim) — extensible,
-# based only on what's actually appeared in real samples so far (see
-# sandbox/). Order matters: first match wins.
-KIND_KEYWORDS = [
-    ("קניה", "buy"),
-    ("ק/", "buy"),
-    ("מכירה", "sell"),
-    ("דיבידנד", "dividend"),
-    ("הפקדה", "deposit"),
-    ("ריבית", "interest"),
-    ("משיכה", "withdrawal"),
-]
-
-
-def classify_kind(description: str) -> str:
-    for keyword, kind in KIND_KEYWORDS:
-        if keyword in description:
-            return kind
-    return "other"

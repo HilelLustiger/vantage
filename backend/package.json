@@ -7,6 +7,7 @@
     "./app": "./src/app.ts",
     "./repositories/users": "./src/repositories/users.ts",
     "./db/client": "./src/db/client.ts",
+    "./db/schema": "./src/db/schema.ts",
     "./password": "./src/controllers/password.ts",
     "./dto": "./src/dto/index.ts"
   },

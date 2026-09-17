@@ -39,6 +39,8 @@ services:
     working_dir: /app
     volumes:
       - ./parser:/app
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     command: sh -c "pip install -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     # no ports: — reachable only by backend, over the compose network (ADR 0001)
 

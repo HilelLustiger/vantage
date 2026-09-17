@@ -1,9 +1,14 @@
-"""Shared test fixtures. build_page (used by test_extraction_engine.py)
-generates a minimal synthetic single-page PDF and returns the real,
-pdfplumber-parsed page — the engine's unit tests exercise the actual
-extraction pipeline against made-up content, not a mocked substitute
-for it, same as extraction_engine.py itself was validated during
-development."""
+"""Shared test fixtures.
+
+build_page generates a minimal synthetic single-page PDF via reportlab and
+returns the real, pdfplumber-parsed page — for ASCII content.
+
+text_lines_page is a minimal stand-in exposing only extract_text_lines()
+(all segmentation.py calls), for Hebrew content: reportlab's default font
+has no Hebrew glyphs, so real PDF generation can't be used there. Lines are
+pre-reversed via get_display() so segmentation's own fix_rtl() call (which
+un-reverses pdfplumber's real visual-order output) turns them back into
+normal, readable text — the same round-trip real PDFs go through."""
 
 import io
 
@@ -50,31 +55,43 @@ def build_page():
         pdf.close()
 
 
-class _FakeTextOnlyPage:
-    """A minimal stand-in for pdfplumber.page.Page, sufficient for
-    templates that only ever call extract_text_lines() — i.e. any
-    template with no SectionSpec/TableSpec (Gemel today; the general
-    rule in ADR-0026 means this covers every FieldSpec-only template).
-    Lines are pre-reversed via get_display() so ExtractionEngine's own
-    fix_rtl() call (which un-reverses pdfplumber's real visual-order
-    output) turns them back into normal, readable text — the same
-    round-trip real PDFs go through, without needing a Hebrew-capable
-    font or real PDF generation (confirmed empirically against every
-    fixture line used against it)."""
+class _FakeTextLinesPage:
+    """bbox defaults to a normal (0, 0)-origin page — pass an offset one
+    (e.g. (0, 822.05, 595.3, 1644.1), confirmed against a real Excellence
+    sample) to exercise segmentation.py's coordinate-normalization fix.
+    Each line is either a plain string (bbox defaults to all-zero, for
+    tests that don't care about position) or a dict with "text" plus
+    explicit "x0"/"top"/"x1"/"bottom" in the *page's own* (unnormalized)
+    coordinate space, same as real pdfplumber output."""
 
-    def __init__(self, lines: list[str]):
+    def __init__(
+        self,
+        lines: list[str | dict],
+        bbox: tuple[float, float, float, float] = (0, 0, 600, 800),
+    ):
         self._lines = lines
+        self.bbox = bbox
+        self.width = bbox[2] - bbox[0]
+        self.height = bbox[3] - bbox[1]
 
     def extract_text_lines(self):
-        return [
-            {"text": get_display(line), "top": i * 20.0, "bottom": i * 20.0 + 15}
-            for i, line in enumerate(self._lines)
-        ]
+        result = []
+        for line in self._lines:
+            if isinstance(line, str):
+                entry = {"text": line, "x0": 0.0, "top": 0.0, "x1": 0.0, "bottom": 0.0}
+            else:
+                entry = dict(line)
+            entry["text"] = get_display(entry["text"])
+            result.append(entry)
+        return result
 
 
 @pytest.fixture
-def text_only_page():
-    def _build(lines: list[str]):
-        return _FakeTextOnlyPage(lines)
+def text_lines_page():
+    def _build(
+        lines: list[str | dict],
+        bbox: tuple[float, float, float, float] = (0, 0, 600, 800),
+    ):
+        return _FakeTextLinesPage(lines, bbox=bbox)
 
     return _build
