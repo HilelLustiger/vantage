@@ -1,0 +1,11 @@
+# Requires `docker compose up -d postgres` (or an equivalent local DB)
+# already running, same as normal dev.
+npm run lint --workspaces --if-present
+npm run typecheck --workspaces --if-present
+npm test --workspaces --if-present
+
+if [ -x parser/.venv/bin/pytest ]; then
+  (cd parser && ruff check . && .venv/bin/pytest -q)
+else
+  echo "skipping parser tests — no parser/.venv (CI runs them properly)"
+fi

@@ -1,42 +1,32 @@
 # Architecture Decision Records
 
 This directory is the source of truth for Vantage's foundational design
-decisions — it replaces the old `docs/decisions.md`. See
-[`docs/DOMAIN.md`](../DOMAIN.md) for the domain glossary, which is kept
-separate from decision rationale.
+decisions. See [`docs/DOMAIN.md`](../DOMAIN.md) for the domain glossary,
+kept separate from decision rationale.
 
 Each ADR captures a decision that was hard to reverse, would be surprising
 without context, or was a real trade-off between genuine alternatives — not
-every implementation detail gets one.
+every implementation detail gets one. As of 2026-09-10, the ADRs below
+replace an earlier set of 32 — the earlier ones were too fine-grained
+(near-one-per-issue) to serve as a real reference; these consolidate every
+decision that's still live into one ADR per genuine subject. Nothing about
+the underlying decisions changed in the consolidation — only how they're
+grouped and written down. New decisions from here on get their own ADR only
+when they clear the bar above; a minor/tooling-level call doesn't need one.
 
 ## Index
 
-| # | Title |
-|---|---|
-| [0001](0001-system-architecture.md) | System architecture — TypeScript + Postgres, Docker Compose, local hosting |
-| [0002](0002-single-backend-service-with-api-ingest-modules.md) | Single backend service, with internal API / Ingest module split |
-| [0003](0003-separate-python-parsing-service.md) | Separate Python parsing service |
-| [0004](0004-single-household-locally-hosted-scope.md) | Single-household, locally-hosted scope — not a SaaS product |
-| [0005](0005-file-import-based-ingestion.md) | File-import-based ingestion, not live institution APIs |
-| [0006](0006-investments-and-transactions-are-separate-features.md) | Investments and Transactions are separate features |
-| [0007](0007-ai-excluded-from-v1.md) | AI deliberately excluded from v1 |
-| [0008](0008-global-asset-registry.md) | Global Asset registry, shared across Accounts |
-| [0009](0009-snapshot-immutability-and-supersede.md) | Snapshots are immutable; corrections supersede rather than overwrite |
-| [0010](0010-asset-resolution-requires-manual-confirmation.md) | Asset resolution requires manual confirmation, never auto-creates |
-| [0011](0011-document-lifecycle-separate-state-machine.md) | Document lifecycle is a separate state machine from Snapshot lifecycle |
-| [0012](0012-multi-currency-store-original-convert-at-read.md) | Multi-currency — store original currency, convert at read time |
-| [0013](0013-shared-ingestion-front-door.md) | Shared ingestion front door, feature-specific extraction |
-| [0014](0014-parser-registry-generic-dispatch.md) | Per-(institution, format) parser registry, generic dispatch |
-| [0015](0015-pdf-first-csv-later.md) | PDF first; CSV support planned later, same registry |
-| [0016](0016-no-special-backfill-mode.md) | No special "backfill mode" |
-| [0017](0017-auth-from-day-one.md) | Auth built in from day one, not deferred |
-| [0018](0018-no-third-party-oauth.md) | No third-party OAuth |
-| [0019](0019-manual-password-reset.md) | No email-based password reset — manual/CLI reset instead |
-| [0020](0020-secrets-and-repo-visibility.md) | Git-ignored .env for secrets; private repo regardless of data sensitivity |
-| [0021](0021-automatic-institution-account-detection.md) | Automatic institution/account detection from statement content |
-| [0022](0022-multi-currency-display-native-vs-aggregate.md) | Multi-currency display — native currency per entity, converted only for aggregates |
-| [0023](0023-per-asset-cash-flow-tracking-and-return-metrics.md) | Per-Asset cash-flow tracking and return metrics |
-| [0024](0024-ingesting-per-transaction-statement-formats.md) | Ingesting per-transaction statement formats |
+| #                                                        | Title                                                                                                                            |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [0001](0001-system-architecture-and-service-topology.md) | System architecture & service topology — TypeScript/Postgres/Python, local hosting, backend orchestrator with a stateless parser |
+| [0002](0002-product-scope-and-governance.md)             | Product scope & governance — single-household, Investments-only, public repo                                                     |
+| [0003](0003-auth-and-secrets.md)                         | Auth & secrets — built in from day one, no third-party OAuth, manual password reset                                              |
+| [0004](0004-domain-model-core.md)                        | Domain model core — Asset registry, Snapshot lifecycle, Document lifecycle, manual asset resolution                              |
+| [0005](0005-multi-currency-and-valuation.md)             | Multi-currency and valuation — original currency storage, native display, live vs. document-based Holdings                       |
+| [0006](0006-cash-flow-tracking-and-return-metrics.md)    | Cash-flow tracking & return metrics — per-Asset and portfolio-level real profit                                                  |
+| [0007](0007-ingestion-pipeline-architecture.md)          | Ingestion pipeline architecture — file import, parser registry, content-driven detection                                         |
+| [0008](0008-parser-generalization-and-ai-extraction.md)  | Parser generalization & AI-assisted extraction — declarative templates, two-tier extraction, allowlist/preflight privacy design  |
+| [0009](0009-type-and-validation-layering.md)             | Type & validation layering — Zod schemas as the source of truth for wire input, colocated in `dto/`, never hand-duplicated       |
 
 ## Open Questions
 
@@ -53,7 +43,15 @@ Revisit before they become blocking:
   different threat model (e.g. a rented server).
 - **Remote / multi-user access model** — how a second household member (or a
   phone) actually connects once it's not just one person on `localhost`. See
-  [0001](0001-system-architecture.md) for the access-model framing.
+  [0001](0001-system-architecture-and-service-topology.md) for the access-model framing.
 - **Whether CSV import will actually be needed** — unconfirmed for this
   household's specific institutions. See
-  [0015](0015-pdf-first-csv-later.md).
+  [0007](0007-ingestion-pipeline-architecture.md).
+- **LLM provider/self-hosting choice for parser field extraction** — the
+  allowlist/preflight design in
+  [0008](0008-parser-generalization-and-ai-extraction.md) is judged
+  sufficient regardless of which provider is chosen; the provider itself
+  isn't picked yet.
+- **Live market-data provider** — [0005](0005-multi-currency-and-valuation.md)
+  fixes the shape of live vs. document-based valuation; which market-data
+  API `backend` actually calls isn't picked yet.

@@ -1,0 +1,30 @@
+name: Refactor
+description: Code change with no user-facing behavior change
+labels: ["type:refactor"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - web
+        - api
+        - ingest
+        - parser
+        - docs
+        - infra
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What's changing, and why
+    validations:
+      required: true
+  - type: input
+    id: related-adr
+    attributes:
+      label: Related ADR (if any)
+      placeholder: "e.g. 0001"
+    validations:
+      required: false

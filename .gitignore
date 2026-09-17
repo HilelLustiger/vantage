@@ -25,16 +25,12 @@ docs/UI-ideas.md
 # Private/exploratory design docs — not the durable record, not for sharing
 docs/private-docs/
 
-# Sandbox: script is tracked, real sample statements never are (ADR-0020 —
-# no real financial data in the repo)
-sandbox/samples/*
-!sandbox/samples/.gitkeep
-sandbox/output/
-sandbox/.venv/
+# Sandbox: throwaway experiments, never part of the repo (see sandbox/README.md)
+sandbox/
 
 
 # Drizzle migrations output is committed; local drizzle-kit cache is not
 .drizzle/
 
-# Uploaded document files — see apps/backend/src/shared/storage.ts
-apps/backend/data/
+# Uploaded document files — see backend/src/shared/storage.ts
+backend/data/

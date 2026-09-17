@@ -6,12 +6,7 @@ import eslintConfigPrettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    ignores: [
-      "**/dist/**",
-      "**/build/**",
-      "**/node_modules/**",
-      "**/drizzle/**",
-    ],
+    ignores: ["**/dist/**", "**/build/**", "**/node_modules/**", "**/drizzle/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -23,24 +18,18 @@ export default tseslint.config(
       },
     },
     rules: {
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        { argsIgnorePattern: "^_" },
-      ],
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
   },
   {
-    files: ["apps/web/**/*.{ts,tsx}"],
+    files: ["web/**/*.{ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": [
-        "warn",
-        { allowConstantExport: true },
-      ],
+      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
     },
   },
   eslintConfigPrettier,

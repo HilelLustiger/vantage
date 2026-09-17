@@ -1,0 +1,9 @@
+npx lint-staged
+npm run typecheck --workspaces --if-present
+npm run test --workspace=web --if-present
+
+if [ -x parser/.venv/bin/pytest ]; then
+  (cd parser && .venv/bin/pytest -q)
+else
+  echo "skipping parser tests — no parser/.venv (CI runs them properly)"
+fi

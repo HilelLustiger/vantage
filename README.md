@@ -28,12 +28,12 @@ parser (internal-only, no host port). First run, in another terminal:
 
 ```sh
 npm install
-npm run db:migrate --workspace=apps/backend
-npm run create-user --workspace=apps/backend -- --email you@example.com --password <password>
+npm run db:migrate --workspace=backend
+npm run create-user --workspace=backend -- --email you@example.com --password <password>
 ```
 
 There's no signup flow — creating a user is always done this way (see
-`docs/ADR/0019-manual-password-reset.md` for the reasoning behind manual
+`docs/ADR/0003-auth-and-secrets.md` for the reasoning behind manual
 account management).
 
 Common scripts, run across every workspace:
